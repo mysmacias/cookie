@@ -8,15 +8,19 @@ export interface UserDataPayload {
 
 export async function fetchUserData(env: Env, userId: string): Promise<UserDataPayload> {
   const [recipesResult, overridesResult, bookmarksResult] = await Promise.all([
-    env.DB.prepare('SELECT data FROM user_recipes WHERE user_id = ? ORDER BY updated_at DESC')
-      .bind(userId).all<{ data: string }>(),
+    env.DB.prepare('SELECT data, updated_at FROM user_recipes WHERE user_id = ? ORDER BY updated_at DESC')
+      .bind(userId).all<{ data: string; updated_at: number }>(),
     env.DB.prepare('SELECT recipe_id, data FROM recipe_overrides WHERE user_id = ?')
       .bind(userId).all<{ recipe_id: string; data: string }>(),
     env.DB.prepare('SELECT recipe_id FROM bookmarks WHERE user_id = ? ORDER BY created_at ASC')
       .bind(userId).all<{ recipe_id: string }>(),
   ]);
 
-  const userRecipes = (recipesResult.results ?? []).map(r => JSON.parse(r.data));
+  const userRecipes = (recipesResult.results ?? []).map(r => {
+    const recipe = JSON.parse(r.data) as Record<string, unknown>;
+    if (typeof recipe.addedAt !== 'number') recipe.addedAt = r.updated_at;
+    return recipe;
+  });
   const overrides: Record<string, unknown> = {};
   for (const row of overridesResult.results ?? []) {
     overrides[row.recipe_id] = JSON.parse(row.data);

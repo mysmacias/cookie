@@ -13,7 +13,9 @@ export type LibrarySort =
   | 'title-desc'
   | 'category-asc'
   | 'difficulty-asc'
-  | 'difficulty-desc';
+  | 'difficulty-desc'
+  | 'added-desc'
+  | 'added-asc';
 
 export const SORT_OPTIONS: { value: LibrarySort; label: string }[] = [
   { value: 'title-asc', label: 'Title A–Z' },
@@ -21,6 +23,8 @@ export const SORT_OPTIONS: { value: LibrarySort; label: string }[] = [
   { value: 'category-asc', label: 'Category' },
   { value: 'difficulty-asc', label: 'Difficulty · easy first' },
   { value: 'difficulty-desc', label: 'Difficulty · hard first' },
+  { value: 'added-desc', label: 'Date added · newest' },
+  { value: 'added-asc', label: 'Date added · oldest' },
 ];
 
 const DIFFICULTY_ORDER: Record<Recipe['difficulty'], number> = {
@@ -33,6 +37,10 @@ function savedSort(): LibrarySort {
     if (v && SORT_OPTIONS.some(o => o.value === v)) return v;
   } catch { /* ignore */ }
   return 'title-asc';
+}
+
+function recipeAddedAt(r: Recipe): number {
+  return r.addedAt ?? 0;
 }
 
 function compareRecipes(a: Recipe, b: Recipe, sort: LibrarySort): number {
@@ -50,6 +58,14 @@ function compareRecipes(a: Recipe, b: Recipe, sort: LibrarySort): number {
     }
     case 'difficulty-desc': {
       const d = DIFFICULTY_ORDER[b.difficulty] - DIFFICULTY_ORDER[a.difficulty];
+      return d !== 0 ? d : byTitle();
+    }
+    case 'added-desc': {
+      const d = recipeAddedAt(b) - recipeAddedAt(a);
+      return d !== 0 ? d : byTitle();
+    }
+    case 'added-asc': {
+      const d = recipeAddedAt(a) - recipeAddedAt(b);
       return d !== 0 ? d : byTitle();
     }
     default: return byTitle();
