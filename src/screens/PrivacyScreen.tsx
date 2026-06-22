@@ -1,7 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
-import { ChevronLeft } from 'lucide-react';
-import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
+import { ScreenShell } from '../components/ui/ScreenShell';
 
 interface PrivacyScreenProps {
   onBack: () => void;
@@ -9,20 +7,7 @@ interface PrivacyScreenProps {
 
 export const PrivacyScreen: React.FC<PrivacyScreenProps> = ({ onBack }) => {
   return (
-    <SwipeBackWrapper onBack={onBack}>
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="max-w-3xl mx-auto space-y-12 py-12"
-    >
-      <button 
-        onClick={onBack}
-        className="flex items-center space-x-2 text-sm font-label uppercase tracking-widest hover:text-primary transition-colors"
-      >
-        <ChevronLeft size={16} />
-        <span>Back</span>
-      </button>
-
+    <ScreenShell onBack={onBack} backLabel="Back" className="py-12">
       <div className="space-y-4">
         <h1 className="text-6xl font-headline italic">Privacy Policy</h1>
         <p className="text-on-surface-variant text-lg italic">Last updated: March 2026</p>
@@ -58,11 +43,21 @@ export const PrivacyScreen: React.FC<PrivacyScreenProps> = ({ onBack }) => {
         <section className="space-y-4">
           <h2 className="text-3xl font-headline italic text-on-surface">Images</h2>
           <p>
-            Recipe images included with the app are bundled within the application. Any images you 
-            load or add to your recipes are stored exclusively on your device and never leave your 
-            phone — they are not uploaded, shared, or transmitted to any server. The app does not 
-            access your camera or photo library unless you explicitly choose to add an image to a 
-            recipe in the future.
+            Recipe images included with the app are bundled within the application. Any images you
+            load or add to your recipes — hero photos and step photos — are stored only in your
+            browser's local storage; they are not uploaded or shared. Your browser only accesses
+            your camera or photo library when you explicitly choose to add or change an image.
+          </p>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-3xl font-headline italic text-on-surface">Recipe Photo Scanning</h2>
+          <p>
+            The optional <em className="not-italic">Scan from photo</em> feature is the one exception:
+            when you choose to scan a recipe, that single image is sent to our hosting provider
+            (Cloudflare) and to Anthropic's Claude API to read the text and suggest recipe fields.
+            The image is processed for that request only and is not used to train models or stored
+            for any other purpose. If you don't use this feature, no images ever leave your device.
           </p>
         </section>
 
@@ -77,12 +72,11 @@ export const PrivacyScreen: React.FC<PrivacyScreenProps> = ({ onBack }) => {
         <section className="space-y-4">
           <h2 className="text-3xl font-headline italic text-on-surface">Contact</h2>
           <p>
-            If you have questions about this privacy policy, please reach out to us through the App Store 
-            listing.
+            If you have questions about this privacy policy, please reach out to us through the
+            contact details on our website.
           </p>
         </section>
       </div>
-    </motion.div>
-    </SwipeBackWrapper>
+    </ScreenShell>
   );
 };

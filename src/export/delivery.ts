@@ -1,19 +1,3 @@
-import { Capacitor } from '@capacitor/core';
-import { Directory, Filesystem } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string;
-      resolve(dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
 function downloadBlobInBrowser(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -37,67 +21,62 @@ async function rememberExport(blob: Blob, filename: string, mime: string): Promi
 }
 
 /**
- * Open the native share sheet with a temporary file.
- * The file is written to Cache (not Documents) since in-app storage is handled by IndexedDB.
+ * Share a file via the Web Share API when the browser supports sharing files
+ * (notably iOS/Android Safari & Chrome), otherwise fall back to a download.
+ * Returns true if the share sheet handled it, false to signal the caller it fell back.
  */
-async function shareViaNativeSheet(blob: Blob, filename: string, title: string): Promise<void> {
-  const safeName = filename.replace(/[/\\]/g, '_');
-  const path = `_share_tmp_${safeName}`;
+async function shareFileViaWebShare(blob: Blob, filename: string, title: string): Promise<boolean> {
+  const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean };
+  if (typeof nav.share !== 'function') return false;
 
-  const base64 = await blobToBase64(blob);
-  await Filesystem.writeFile({ path, data: base64, directory: Directory.Cache });
-  const { uri } = await Filesystem.getUri({ directory: Directory.Cache, path });
+  const file = new File([blob], filename, { type: blob.type });
+  const data: ShareData = { title, files: [file] };
+
+  if (typeof nav.canShare === 'function' && !nav.canShare(data)) return false;
 
   try {
-    await Share.share({ title, files: [uri], dialogTitle: title });
+    await nav.share(data);
+    return true;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (isUserCanceledShare(msg)) return;
-    try {
-      await Share.share({ title, url: uri, dialogTitle: title });
-    } catch (e2) {
-      const msg2 = e2 instanceof Error ? e2.message : String(e2);
-      if (!isUserCanceledShare(msg2)) throw e2;
-    }
+    if (isUserCanceledShare(msg)) return true; // user dismissed the sheet — nothing more to do
+    return false; // share failed for another reason — let the caller download instead
   }
 }
 
 /**
- * Save PDF to My books (IndexedDB), then share on native or download on web.
+ * Save PDF to My books (IndexedDB), then offer the native share sheet (Web Share API)
+ * with a download fallback.
  */
 export async function deliverPdfExport(blob: Blob, filename: string, title: string): Promise<void> {
   await rememberExport(blob, filename, 'application/pdf');
-
-  if (Capacitor.isNativePlatform()) {
-    try {
-      await shareViaNativeSheet(blob, filename, title);
-    } catch (e) {
-      console.warn('[Cookie export] Native share failed', e);
-    }
-  } else {
-    downloadBlobInBrowser(blob, filename);
-  }
+  const shared = await shareFileViaWebShare(blob, filename, title);
+  if (!shared) downloadBlobInBrowser(blob, filename);
 }
 
 /**
- * Save Markdown to My books (IndexedDB). On web also triggers a browser download.
+ * Save Markdown to My books (IndexedDB), then offer the native share sheet with a download fallback.
  */
-export async function deliverMarkdownExport(blob: Blob, filename: string): Promise<void> {
+export async function deliverMarkdownExport(blob: Blob, filename: string, title?: string): Promise<void> {
   const safeName = filename.replace(/[/\\]/g, '_');
   await rememberExport(blob, safeName, 'text/markdown');
-
-  if (!Capacitor.isNativePlatform()) {
-    downloadBlobInBrowser(blob, safeName);
-  }
+  const shared = await shareFileViaWebShare(blob, safeName, title ?? safeName);
+  if (!shared) downloadBlobInBrowser(blob, safeName);
 }
 
 export async function shareTextNative(text: string, title: string): Promise<void> {
-  try {
-    await Share.share({ title, text, dialogTitle: title });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (!isUserCanceledShare(msg)) throw e;
+  const nav = navigator as Navigator;
+  if (typeof nav.share === 'function') {
+    try {
+      await nav.share({ title, text });
+      return;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (isUserCanceledShare(msg)) return;
+      // fall through to clipboard
+    }
   }
+  await copyTextToClipboard(text);
 }
 
 export function copyTextToClipboard(text: string): Promise<void> {

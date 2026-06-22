@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Menu, X } from 'lucide-react';
 import { Screen } from '../hooks/useNavigation';
@@ -11,6 +11,15 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMenuOpen, setIsMenuOpen }) => {
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMenuOpen(false);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isMenuOpen, setIsMenuOpen]);
+
   return (
     <>
       <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 safe-area-top">
@@ -35,6 +44,9 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
           <button 
             className="md:hidden p-2"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-expanded={isMenuOpen}
+            aria-controls="mobile-menu"
+            aria-label="Toggle menu"
           >
             {isMenuOpen ? <X /> : <Menu />}
           </button>
@@ -43,7 +55,8 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
 
       <AnimatePresence>
         {isMenuOpen && (
-          <motion.div 
+          <motion.div
+            id="mobile-menu"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}

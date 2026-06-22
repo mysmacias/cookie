@@ -1,19 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { motion } from 'motion/react';
 import { Clock, Flame, Heart, ArrowRight, UtensilsCrossed, ImagePlus, Check } from 'lucide-react';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { Capacitor } from '@capacitor/core';
 import { Recipe } from '../types';
-import { updateRecipe } from '../services/recipeStore';
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-}
+import { useImagePicker } from '../hooks/useImagePicker';
+import { HiddenFileInputs } from './HiddenFileInputs';
+import { useRecipes } from '../context/RecipeContext';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -36,52 +27,19 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
   selected = false,
   onSelectToggle,
 }) => {
+  const ctx = useRecipes();
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const applyHeroImage = (dataUrl: string) => {
+  const applyHeroImage = useCallback((dataUrl: string) => {
     const next = dataUrl.trim();
     if (!next) return;
-    updateRecipe({ ...recipe, image: next });
+    ctx.updateRecipe({ ...recipe, image: next });
     onRecipeImageChanged();
     setImageMenuOpen(false);
-  };
+  }, [recipe, onRecipeImageChanged, ctx]);
 
-  const pickFromNativeLibrary = async () => {
-    try {
-      const photo = await Camera.getPhoto({
-        quality: 88,
-        allowEditing: false,
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Photos,
-      });
-      if (photo.dataUrl) applyHeroImage(photo.dataUrl);
-    } catch {
-      /* user cancelled or unavailable */
-    }
-  };
-
-  const pickFromNativeCamera = async () => {
-    try {
-      const photo = await Camera.getPhoto({
-        quality: 88,
-        allowEditing: true,
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Camera,
-      });
-      if (photo.dataUrl) applyHeroImage(photo.dataUrl);
-    } catch {
-      /* user cancelled or unavailable */
-    }
-  };
-
-  const onGalleryFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    applyHeroImage(await readFileAsDataUrl(file));
-  };
+  const { galleryInputRef, cameraInputRef, handleFileChange, openLibrary, openCamera } =
+    useImagePicker(applyHeroImage);
 
   return (
     <motion.div 
@@ -93,6 +51,13 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
         if (selectionMode) onSelectToggle?.();
         else onClick();
       }}
+      onKeyDown={selectionMode ? (e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          onSelectToggle?.();
+        }
+      } : undefined}
+      tabIndex={selectionMode ? 0 : undefined}
       role={selectionMode ? 'checkbox' : undefined}
       aria-checked={selectionMode ? selected : undefined}
     >
@@ -109,21 +74,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
             <UtensilsCrossed size={48} className="text-outline-variant" />
           </div>
         )}
-        <input
-          ref={galleryInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={onGalleryFile}
-        />
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={onGalleryFile}
-        />
+        <HiddenFileInputs galleryRef={galleryInputRef} cameraRef={cameraInputRef} onChange={handleFileChange} />
 
         <div className="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-2 max-w-[min(100%,calc(100%-5.5rem))] pr-1">
           <span className="bg-surface/65 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-label uppercase tracking-widest border border-outline-variant/20">
@@ -156,11 +107,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     setImageMenuOpen(false);
-                    if (Capacitor.isNativePlatform()) {
-                      void pickFromNativeLibrary();
-                    } else {
-                      galleryInputRef.current?.click();
-                    }
+                    openLibrary();
                   }}
                 >
                   Photo library
@@ -172,11 +119,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     setImageMenuOpen(false);
-                    if (Capacitor.isNativePlatform()) {
-                      void pickFromNativeCamera();
-                    } else {
-                      cameraInputRef.current?.click();
-                    }
+                    openCamera();
                   }}
                 >
                   Take photo

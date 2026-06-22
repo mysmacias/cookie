@@ -88,7 +88,7 @@ export const ExportRecipeModal: React.FC<ExportRecipeModalProps> = ({
             ? await buildSingleRecipePdfBlob(recipes[0], options, exportedAt)
             : await buildCookbookPdfBlob(recipes, options, exportedAt);
       } catch (genErr) {
-        console.error('[Cookie export] PDF generation failed', genErr);
+        console.warn('[Cookie export] PDF generation failed', genErr);
         onFeedback(
           'Could not build the PDF. Try turning off photos in the options below, or use Markdown.'
         );
@@ -105,7 +105,7 @@ export const ExportRecipeModal: React.FC<ExportRecipeModalProps> = ({
       onFeedback('PDF saved to My books');
       onClose();
     } catch (e) {
-      console.error('[Cookie export] Unexpected export error', e);
+      console.warn('[Cookie export] Unexpected export error', e);
       onFeedback('Something went wrong finishing the export. Please try again.');
     } finally {
       setBusy(null);
@@ -127,7 +127,7 @@ export const ExportRecipeModal: React.FC<ExportRecipeModalProps> = ({
       await copyTextToClipboard(mdContent());
       onFeedback('Markdown copied');
     } catch (e) {
-      console.error(e);
+      console.warn('[Cookie export] Copy to clipboard failed', e);
       onFeedback('Copy failed');
     } finally {
       setBusy(null);

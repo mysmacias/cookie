@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   ChevronLeft, 
@@ -10,9 +10,11 @@ import {
   Pencil
 } from 'lucide-react';
 import { Recipe } from '../types';
-import { isBookmarked, toggleBookmark } from '../services/recipeStore';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { ExportRecipeModal } from '../components/ExportRecipeModal';
+import { useToast } from '../components/ui/Toast';
+import { Label } from '../components/ui/Label';
+import { useRecipes } from '../context/RecipeContext';
 
 interface RecipeDetailScreenProps {
   recipe: Recipe;
@@ -22,19 +24,13 @@ interface RecipeDetailScreenProps {
 }
 
 export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, onBack, onStartCooking, onEditRecipe }) => {
-  const [bookmarked, setBookmarked] = useState(() => isBookmarked(recipe.id));
+  const ctx = useRecipes();
+  const bookmarked = ctx.isBookmarked(recipe.id);
   const [exportOpen, setExportOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 3200);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const { showToast } = useToast();
 
   const handleToggleBookmark = () => {
-    const newState = toggleBookmark(recipe.id);
-    setBookmarked(newState);
+    ctx.toggleBookmark(recipe.id);
   };
 
   return (
@@ -81,22 +77,22 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
 
           <div className="flex flex-wrap gap-8 py-8 border-y border-outline-variant/30">
             <div className="space-y-1">
-              <span className="text-[10px] font-label uppercase tracking-widest opacity-50">Prep Time</span>
+              <Label>Prep Time</Label>
               <p className="font-headline italic text-xl">{recipe.prepTime}</p>
             </div>
             {recipe.bakeTime && (
               <div className="space-y-1">
-                <span className="text-[10px] font-label uppercase tracking-widest opacity-50">Bake Time</span>
+                <Label>Bake Time</Label>
                 <p className="font-headline italic text-xl">{recipe.bakeTime}</p>
               </div>
             )}
             <div className="space-y-1">
-              <span className="text-[10px] font-label uppercase tracking-widest opacity-50">Difficulty</span>
+              <Label>Difficulty</Label>
               <p className="font-headline italic text-xl">{recipe.difficulty}</p>
             </div>
             {recipe.yields && (
               <div className="space-y-1">
-                <span className="text-[10px] font-label uppercase tracking-widest opacity-50">Yields</span>
+                <Label>Yields</Label>
                 <p className="font-headline italic text-xl">{recipe.yields}</p>
               </div>
             )}
@@ -224,13 +220,8 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
         recipes={[recipe]}
         open={exportOpen}
         onClose={() => setExportOpen(false)}
-        onFeedback={(message) => setToast(message)}
+        onFeedback={showToast}
       />
-      {toast ? (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[250] px-5 py-3 rounded-full bg-on-surface text-surface text-sm shadow-lg max-w-[90vw] text-center">
-          {toast}
-        </div>
-      ) : null}
     </motion.div>
     </SwipeBackWrapper>
   );

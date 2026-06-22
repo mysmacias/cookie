@@ -1,0 +1,24 @@
+{
+  "name": "COOKIE — The Digital Gastronome",
+  "short_name": "Cookie",
+  "description": "A curated recipe app for the modern home cook.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbf9f4",
+  "theme_color": "#496251",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

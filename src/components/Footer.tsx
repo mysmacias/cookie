@@ -28,7 +28,6 @@ export const Footer: React.FC<FooterProps> = ({ navigateTo }) => {
           <h4 className="text-xs font-label uppercase tracking-widest mb-6 opacity-50">Legal</h4>
           <ul className="space-y-4 text-sm">
             <li><button onClick={() => navigateTo('privacy')}>Privacy</button></li>
-            <li><button>Terms</button></li>
           </ul>
         </div>
       </div>

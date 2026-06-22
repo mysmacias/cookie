@@ -28,13 +28,26 @@ export async function buildSingleRecipePdfBlob(
   }
 }
 
+async function mapConcurrent<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
 export async function buildCookbookPdfBlob(
   recipes: Recipe[],
   options: ExportOptions,
   exportedAt = new Date()
 ): Promise<Blob> {
   const rawModels = recipes.map((r) => normalizeRecipeForExport(r, options));
-  const models = await Promise.all(rawModels.map(resolveModelImages));
+  const models = await mapConcurrent(rawModels, 4, resolveModelImages);
   const shoppingListLines =
     options.appendShoppingList && recipes.length > 1
       ? buildCombinedShoppingListLines(recipes)

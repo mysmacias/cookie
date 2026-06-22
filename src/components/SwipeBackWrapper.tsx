@@ -1,8 +1,7 @@
 import React, { useRef } from 'react';
 import { useDrag } from '@use-gesture/react';
 import { motion, useMotionValue, useTransform } from 'motion/react';
-import { Capacitor } from '@capacitor/core';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { haptic } from '../utils/haptics';
 
 const SWIPE_THRESHOLD = 120;
 const LEFT_EDGE_ONLY_PX = 48;
@@ -40,9 +39,7 @@ export const SwipeBackWrapper: React.FC<SwipeBackWrapperProps> = ({
 
       if (!active && mx > SWIPE_THRESHOLD && !firedRef.current) {
         firedRef.current = true;
-        if (Capacitor.isNativePlatform()) {
-          void Haptics.impact({ style: ImpactStyle.Light });
-        }
+        haptic('light');
         onBack();
       }
 
@@ -57,9 +54,17 @@ export const SwipeBackWrapper: React.FC<SwipeBackWrapperProps> = ({
     }
   );
 
+  const {
+    onAnimationStart: _1,
+    onDragStart: _2,
+    onDrag: _3,
+    onDragEnd: _4,
+    ...gestureHandlers
+  } = bind();
+
   return (
     <motion.div
-      {...bind()}
+      {...gestureHandlers}
       style={{ x, opacity, touchAction: 'pan-y' }}
       className={className}
     >
