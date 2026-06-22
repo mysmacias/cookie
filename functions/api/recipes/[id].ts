@@ -29,7 +29,16 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
   }
 
   if (recipeId.startsWith('user_')) {
-    await upsertUserRecipe(env, userOrResponse.id, body);
+    const existing = await env.DB.prepare(
+      'SELECT data FROM user_recipes WHERE user_id = ? AND id = ?',
+    ).bind(userOrResponse.id, recipeId).first<{ data: string }>();
+    const prior = existing ? JSON.parse(existing.data) as { addedAt?: number } : null;
+    const recipe = {
+      ...body,
+      addedAt: typeof body.addedAt === 'number' ? body.addedAt : prior?.addedAt ?? Date.now(),
+    };
+    await upsertUserRecipe(env, userOrResponse.id, recipe);
+    return json({ recipe });
   } else {
     await upsertOverride(env, userOrResponse.id, recipeId, body);
   }

@@ -22,7 +22,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (!isRecipeShape(body)) return error('Invalid recipe data.');
 
-  const recipe = { ...body, id: `user_${generateId()}` };
+  const recipe = { ...body, id: `user_${generateId()}`, addedAt: Date.now() };
   await upsertUserRecipe(env, userOrResponse.id, recipe);
   return json({ recipe }, 201);
 };
