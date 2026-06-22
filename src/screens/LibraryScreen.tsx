@@ -48,6 +48,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo }) => {
         onExportList={() => openExport(lib.filteredRecipes)}
         onExportSelected={() => openExport(lib.selectedRecipes)}
         onAddRecipe={() => navigateTo('add')}
+        onDiscover={() => navigateTo('discover')}
       />
 
       {lib.filteredRecipes.length === 0 ? (

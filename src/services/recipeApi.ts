@@ -71,7 +71,7 @@ export async function saveRecipe(recipe: Recipe): Promise<Recipe> {
     body: JSON.stringify(recipe),
   });
 
-  if (recipe.id.startsWith('user_')) {
+  if (recipe.id.startsWith('user_') || recipe.id.startsWith('api_')) {
     const i = userRecipes.findIndex(r => r.id === recipe.id);
     if (i !== -1) userRecipes[i] = data.recipe;
     else userRecipes.push(data.recipe);

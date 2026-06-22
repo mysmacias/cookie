@@ -21,6 +21,7 @@ function pick(pool: string[], seed: number, offset: number): string {
  */
 export function applyBundledRecipeMedia(recipe: Recipe): Recipe {
   if (recipe.id.startsWith('user_')) return recipe;
+  if (!recipe.id.startsWith('api_') && !/^\d+$/.test(recipe.id)) return recipe;
 
   const pool = FOOD_IMAGE_URLS;
   const h = stableHash(recipe.id);

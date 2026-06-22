@@ -12,6 +12,7 @@ import { SwipeBackWrapper } from './components/SwipeBackWrapper';
 import { AddRecipeScreen } from './screens/AddRecipeScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ExportsScreen } from './screens/ExportsScreen';
+import { DiscoverRecipesScreen } from './screens/DiscoverRecipesScreen';
 import { AuthScreen } from './screens/AuthScreen';
 import { useRecipes } from './context/RecipeContext';
 import { Recipe } from './types';
@@ -95,6 +96,10 @@ export default function App() {
         <AnimatePresence mode="wait">
           {currentScreen === 'library' && (
             <LibraryScreen navigateTo={navigateTo} />
+          )}
+
+          {currentScreen === 'discover' && (
+            <DiscoverRecipesScreen navigateTo={navigateTo} />
           )}
 
           {currentScreen === 'detail' && selectedRecipe && (

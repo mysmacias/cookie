@@ -10,7 +10,10 @@ import {
 export function getAllRecipes(): Recipe[] {
   const overrides = getCachedOverrides();
   const bundled = RECIPES.map(r => applyBundledRecipeMedia(overrides[r.id] ?? r));
-  return [...bundled, ...getCachedUserRecipes()];
+  const imported = getCachedUserRecipes().map(r =>
+    r.id.startsWith('api_') ? applyBundledRecipeMedia(r) : r,
+  );
+  return [...bundled, ...imported];
 }
 
 export function isBookmarked(recipeId: string): boolean {

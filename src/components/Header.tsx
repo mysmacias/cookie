@@ -35,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
           
           <div className="hidden md:flex items-center space-x-10 text-sm font-label uppercase tracking-widest">
             <button onClick={() => navigateTo('library')} className={currentScreen === 'library' ? 'text-primary font-bold' : 'hover:text-primary'}>The Library</button>
+            <button onClick={() => navigateTo('discover')} className={currentScreen === 'discover' ? 'text-primary font-bold' : 'hover:text-primary'}>Discover</button>
             <button onClick={() => navigateTo('exports')} className={currentScreen === 'exports' ? 'text-primary font-bold' : 'hover:text-primary'}>My books</button>
             <button onClick={() => navigateTo('about')} className={currentScreen === 'about' ? 'text-primary font-bold' : 'hover:text-primary'}>About</button>
             {auth.user && (
@@ -83,6 +84,13 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
                 className={currentScreen === 'library' ? 'text-primary font-bold' : 'text-left hover:text-primary'}
               >
                 The Library
+              </button>
+              <button
+                type="button"
+                onClick={() => navigateTo('discover')}
+                className={currentScreen === 'discover' ? 'text-primary font-bold' : 'text-left hover:text-primary'}
+              >
+                Discover
               </button>
               <button
                 type="button"

@@ -3,6 +3,7 @@ import { Recipe } from '../types';
 
 export type Screen =
   | 'library'
+  | 'discover'
   | 'detail'
   | 'cooking'
   | 'add'

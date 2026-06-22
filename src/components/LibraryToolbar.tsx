@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, SquareCheck, ListX, ArrowUpDown } from 'lucide-react';
+import { Plus, Search, SquareCheck, ListX, ArrowUpDown, Sparkles } from 'lucide-react';
 import { SORT_OPTIONS, type LibrarySort } from '../hooks/useLibraryFilters';
 import type { Recipe } from '../types';
 
@@ -18,6 +18,7 @@ interface LibraryToolbarProps {
   onExportList: () => void;
   onExportSelected: () => void;
   onAddRecipe: () => void;
+  onDiscover?: () => void;
 }
 
 export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
@@ -27,7 +28,7 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
   selectionMode, setSelectionMode,
   selectedCount, exitSelectionMode,
   filteredCount, onExportList, onExportSelected,
-  onAddRecipe,
+  onAddRecipe, onDiscover,
 }) => (
   <>
     <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
@@ -137,6 +138,16 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
       >
         <Plus size={18} strokeWidth={2.25} />
       </button>
+      {onDiscover ? (
+        <button
+          type="button"
+          onClick={onDiscover}
+          className="border border-primary/40 text-primary px-4 py-2 rounded-full text-xs font-label uppercase tracking-widest flex items-center gap-2"
+        >
+          <Sparkles size={14} />
+          Discover
+        </button>
+      ) : null}
     </div>
   </>
 );

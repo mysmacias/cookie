@@ -6,6 +6,7 @@
 - **npm** (comes with Node)
 - A **Cloudflare account** (for deployment)
 - An **Anthropic API key** (for the photo-scan feature)
+- A **Recipe API key** from [recipeapi.io](https://recipeapi.io/) (for the Discover / import feature)
 - **Google** and/or **GitHub OAuth apps** (for social sign-in; optional but recommended)
 
 ## 1. Install Dependencies
@@ -78,9 +79,17 @@ so you can exercise `/api/scan-recipe`. Provide the API key for local testing:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... \
+RECIPE_API_KEY=sk_live_... \
 GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... \
 GITHUB_CLIENT_ID=... GITHUB_CLIENT_SECRET=... \
 npm run pages:dev
+```
+
+For local full-stack dev, you can also put secrets in `.dev.vars` (gitignored) — Wrangler loads it automatically:
+
+```
+RECIPE_API_KEY=sk_live_...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ## 5b. OAuth setup (Google + GitHub)
@@ -119,7 +128,7 @@ First-time setup:
 
 1. Authenticate Wrangler: `npx wrangler login`
 2. Apply D1 migrations: `npx wrangler d1 migrations apply cookie-db --remote`
-3. Set secrets: `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (see §5b)
+3. Set secrets: `ANTHROPIC_API_KEY`, `RECIPE_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (see §5b)
 4. If deploying via the Cloudflare dashboard (Git), add a **D1 binding** named `DB` → `cookie-db` under Pages → Settings → Functions
 
 Alternatively, connect the Git repo in the Cloudflare dashboard with:

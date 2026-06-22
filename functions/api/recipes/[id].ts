@@ -28,7 +28,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     return error('Invalid recipe data.');
   }
 
-  if (recipeId.startsWith('user_')) {
+  if (recipeId.startsWith('user_') || recipeId.startsWith('api_')) {
     await upsertUserRecipe(env, userOrResponse.id, body);
   } else {
     await upsertOverride(env, userOrResponse.id, recipeId, body);
