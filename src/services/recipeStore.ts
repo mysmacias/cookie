@@ -1,32 +1,10 @@
 import { Recipe } from '../types';
-import { RECIPES } from '../constants';
+import { RECIPES } from '../data/bundledRecipes';
 import { applyBundledRecipeMedia } from '../utils/applyBundledRecipeMedia';
-import { Capacitor } from '@capacitor/core';
-import { Preferences } from '@capacitor/preferences';
 
 const USER_RECIPES_KEY = 'cookie_user_recipes';
 const BOOKMARKS_KEY = 'cookie_bookmarks';
 const OVERRIDES_KEY = 'cookie_recipe_overrides';
-
-async function syncToNative(key: string, value: string) {
-  if (Capacitor.isNativePlatform()) {
-    await Preferences.set({ key, value });
-  }
-}
-
-export async function hydrateFromNative() {
-  if (!Capacitor.isNativePlatform()) return;
-  try {
-    const { value: recipes } = await Preferences.get({ key: USER_RECIPES_KEY });
-    if (recipes) localStorage.setItem(USER_RECIPES_KEY, recipes);
-    const { value: bookmarks } = await Preferences.get({ key: BOOKMARKS_KEY });
-    if (bookmarks) localStorage.setItem(BOOKMARKS_KEY, bookmarks);
-    const { value: overrides } = await Preferences.get({ key: OVERRIDES_KEY });
-    if (overrides) localStorage.setItem(OVERRIDES_KEY, overrides);
-  } catch {
-    // native storage unavailable, localStorage fallback is fine
-  }
-}
 
 function loadUserRecipes(): Recipe[] {
   try {
@@ -43,10 +21,16 @@ function saveUserRecipes(recipes: Recipe[]): void {
   try {
     const json = JSON.stringify(recipes);
     localStorage.setItem(USER_RECIPES_KEY, json);
-    syncToNative(USER_RECIPES_KEY, json);
-  } catch {
-    // silently fail
+  } catch (e) {
+    console.warn('saveUserRecipes failed:', e);
   }
+}
+
+function isRecipeShape(v: unknown): v is Recipe {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.id === 'string' && typeof o.title === 'string' &&
+    Array.isArray(o.steps) && Array.isArray(o.ingredients);
 }
 
 function loadOverrides(): Record<string, Recipe> {
@@ -54,8 +38,12 @@ function loadOverrides(): Record<string, Recipe> {
     const raw = localStorage.getItem(OVERRIDES_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, Recipe>;
-    return {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const result: Record<string, Recipe> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (isRecipeShape(v)) result[k] = v;
+    }
+    return result;
   } catch {
     return {};
   }
@@ -65,9 +53,8 @@ function saveOverrides(map: Record<string, Recipe>): void {
   try {
     const json = JSON.stringify(map);
     localStorage.setItem(OVERRIDES_KEY, json);
-    syncToNative(OVERRIDES_KEY, json);
-  } catch {
-    // silently fail
+  } catch (e) {
+    console.warn('saveOverrides failed:', e);
   }
 }
 
@@ -86,9 +73,8 @@ function saveBookmarks(ids: string[]): void {
   try {
     const json = JSON.stringify(ids);
     localStorage.setItem(BOOKMARKS_KEY, json);
-    syncToNative(BOOKMARKS_KEY, json);
-  } catch {
-    // silently fail
+  } catch (e) {
+    console.warn('saveBookmarks failed:', e);
   }
 }
 

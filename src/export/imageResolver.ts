@@ -1,17 +1,9 @@
 import type { ExportRecipeModel } from './types';
+import { blobToDataUrl } from '../utils/fileHelpers';
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_EXPORT_IMAGE_PX = 1600;
 const JPEG_QUALITY = 0.88;
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
 
 /**
  * Re-encode as JPEG so PDFKit always gets a format it supports (WebP/AVIF from

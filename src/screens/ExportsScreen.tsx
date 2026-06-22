@@ -11,12 +11,14 @@ import {
   type ExportDocItem,
 } from '../services/exportLibrary';
 import { Screen } from '../hooks/useNavigation';
+import { useToast } from '../components/ui/Toast';
 
 interface ExportsScreenProps {
   navigateTo: (screen: Screen) => void;
 }
 
 export const ExportsScreen: React.FC<ExportsScreenProps> = ({ navigateTo }) => {
+  const { showToast } = useToast();
   const [docs, setDocs] = useState<ExportDocItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewer, setViewer] = useState<
@@ -24,6 +26,7 @@ export const ExportsScreen: React.FC<ExportsScreenProps> = ({ navigateTo }) => {
     | { mode: 'md'; text: string; title: string }
     | null
   >(null);
+  const [pendingDelete, setPendingDelete] = useState<ExportDocItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,17 +56,18 @@ export const ExportsScreen: React.FC<ExportsScreenProps> = ({ navigateTo }) => {
         setViewer({ mode: 'md', text, title: item.displayName });
       }
     } catch (e) {
-      console.error(e);
+      console.warn('[Cookie] Failed to open export', e);
+      showToast('Could not open this export.');
     }
   };
 
-  const confirmDelete = async (item: ExportDocItem) => {
-    if (!window.confirm(`Remove "${item.displayName}" from My books?`)) return;
+  const executeDelete = async (item: ExportDocItem) => {
     try {
       await deleteExportDocument(item);
       await load();
     } catch (e) {
-      console.error(e);
+      console.warn('[Cookie] Failed to delete export', e);
+      showToast('Could not delete this export.');
     }
   };
 
@@ -146,7 +150,7 @@ export const ExportsScreen: React.FC<ExportsScreenProps> = ({ navigateTo }) => {
                 <button
                   type="button"
                   aria-label={`Remove ${item.displayName}`}
-                  onClick={() => void confirmDelete(item)}
+                  onClick={() => setPendingDelete(item)}
                   className="shrink-0 p-3 rounded-full border border-outline-variant/50 text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors"
                 >
                   <Trash2 size={18} />
@@ -156,6 +160,50 @@ export const ExportsScreen: React.FC<ExportsScreenProps> = ({ navigateTo }) => {
           </ul>
         )}
       </motion.div>
+
+      <AnimatePresence>
+        {pendingDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[280] flex items-end sm:items-center justify-center bg-on-surface/40 backdrop-blur-sm"
+            onClick={() => setPendingDelete(null)}
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              className="bg-surface rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-6 space-y-5 shadow-xl safe-area-bottom"
+              onClick={e => e.stopPropagation()}
+            >
+              <p className="font-headline italic text-xl">Remove export?</p>
+              <p className="text-on-surface-variant text-sm">
+                &ldquo;{pendingDelete.displayName}&rdquo; will be permanently removed from My books.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete(null)}
+                  className="flex-1 py-3 rounded-full border border-outline-variant text-sm font-label uppercase tracking-widest"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void executeDelete(pendingDelete);
+                    setPendingDelete(null);
+                  }}
+                  className="flex-1 py-3 rounded-full bg-secondary text-on-primary text-sm font-label uppercase tracking-widest font-bold"
+                >
+                  Remove
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {viewer ? (

@@ -3,10 +3,13 @@ const DB_VER = 2;
 const STORE = 'exports';
 const MAX_ENTRIES = 80;
 
+export type ExportKind = 'pdf' | 'md';
+
 export interface WebExportRecord {
   id: string;
   filename: string;
   mime: string;
+  kind: ExportKind;
   savedAt: number;
 }
 
@@ -38,13 +41,18 @@ function openDb(): Promise<IDBDatabase> {
  * Eagerly read the blob into an ArrayBuffer and store it in IndexedDB.
  * This guarantees every byte is captured even if the source blob is stream-backed.
  */
+function kindFromMime(mime: string): ExportKind {
+  return mime.includes('pdf') ? 'pdf' : 'md';
+}
+
 export async function rememberWebExport(blob: Blob, filename: string, mime: string): Promise<void> {
   if (!canUseIdb()) return;
   try {
     const data = await blob.arrayBuffer();
     const db = await openDb();
     const id = `w-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const record: StoredRecord = { id, filename, mime, savedAt: Date.now(), data };
+    const kind = kindFromMime(mime);
+    const record: StoredRecord = { id, filename, mime, kind, savedAt: Date.now(), data };
 
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite');
@@ -78,7 +86,9 @@ export async function listWebExports(): Promise<WebExportRecord[]> {
       req.onsuccess = () => {
         const rows = (req.result as StoredRecord[]) ?? [];
         rows.sort((a, b) => b.savedAt - a.savedAt);
-        resolve(rows.map(({ id, filename, mime, savedAt }) => ({ id, filename, mime, savedAt })));
+        resolve(rows.map(({ id, filename, mime, kind, savedAt }) => ({
+          id, filename, mime, kind: kind ?? kindFromMime(mime), savedAt,
+        })));
       };
       req.onerror = () => reject(req.error);
     });

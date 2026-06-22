@@ -4,9 +4,8 @@
 
 - **Node.js** 18 or later
 - **npm** (comes with Node)
-- **Xcode** 15 or later (for iOS builds)
-- **CocoaPods** (installed automatically by Capacitor, or `sudo gem install cocoapods`)
-- **Apple Developer Account** ($99/year, required only for deploying to a physical device or the App Store)
+- A **Cloudflare account** (for deployment)
+- An **Anthropic API key** (for the photo-scan feature)
 
 ## 1. Install Dependencies
 
@@ -24,13 +23,15 @@ npm run dev
 Opens a dev server at **http://localhost:3000** with hot module replacement.
 This is the fastest way to develop and test UI changes.
 
+> The `/api/scan-recipe` endpoint runs only under Cloudflare's runtime, so the
+> photo-scan button won't work under `npm run dev`. See step 5 to test it locally.
+
 ## 3. Type Check
 
 ```bash
-npm run lint
+npm run lint   # app code (src/)
+npx tsc --noEmit -p functions/tsconfig.json   # serverless code (functions/)
 ```
-
-Runs `tsc --noEmit` to catch TypeScript errors without producing output files.
 
 ## 4. Production Build
 
@@ -38,86 +39,55 @@ Runs `tsc --noEmit` to catch TypeScript errors without producing output files.
 npm run build
 ```
 
-Generates an optimized production bundle in the `dist/` folder.
+Generates an optimized static bundle in the `dist/` folder.
 
-## 5. Preview the Production Build
-
-```bash
-npm run preview
-```
-
-Serves the `dist/` folder locally so you can verify the production build before deploying.
-
-## 6. Build and Run on iOS Simulator
+## 5. Preview with Functions (Cloudflare runtime)
 
 ```bash
 npm run build
-npx cap sync ios
-npx cap open ios
+npm run pages:dev
 ```
 
-This will:
-1. Build the web app into `dist/`
-2. Copy the build + sync native plugins into the `ios/` Xcode project
-3. Open the project in Xcode
-
-Once Xcode is open:
-- Select a simulator from the device dropdown (e.g., iPhone 16 Pro)
-- Press **Cmd + R** or click the play button to build and run
-
-## 7. Run on a Physical iPhone
-
-1. Connect your iPhone via USB
-2. In Xcode, select your phone from the device dropdown
-3. Go to **Signing & Capabilities** in the App target settings
-4. Select your development team (requires an Apple Developer Account)
-5. Press **Cmd + R** to build and install on the device
-
-If this is your first time running on the device, you may need to trust the developer certificate on the phone: **Settings > General > VPN & Device Management**.
-
-## 8. Live Reload on iOS (Development)
-
-For faster iteration while testing on iOS, you can use Capacitor's live reload:
+`wrangler pages dev dist` serves the built site **and** the `functions/` code,
+so you can exercise `/api/scan-recipe`. Provide the API key for local testing:
 
 ```bash
-npm run dev
+ANTHROPIC_API_KEY=sk-ant-... npm run pages:dev
 ```
 
-Then in a separate terminal:
+## 6. Deploy to Cloudflare Pages
 
 ```bash
-npx cap run ios --livereload --external
+npm run deploy        # runs `npm run build` then `wrangler pages deploy dist`
 ```
 
-This runs the app on the simulator but loads from your dev server, so changes appear instantly without rebuilding.
+First-time setup:
 
-## 9. Clean Build
+1. Authenticate Wrangler: `npx wrangler login`
+2. Set the scan secret: `npx wrangler pages secret put ANTHROPIC_API_KEY`
 
-If you encounter stale build artifacts:
+Alternatively, connect the Git repo in the Cloudflare dashboard with:
+
+- **Build command:** `npm run build`
+- **Build output directory:** `dist`
+- **Environment variable:** `ANTHROPIC_API_KEY` (and `NODE_VERSION` = 18+)
+
+## 7. Clean Build
 
 ```bash
 npm run clean        # removes dist/
 npm run build        # fresh build
-npx cap sync ios     # re-sync to iOS
 ```
-
-In Xcode, you can also do **Product > Clean Build Folder** (Cmd + Shift + K).
-
-## 10. Preparing for App Store Submission
-
-1. In Xcode, set the **Bundle Identifier** to `com.cookie.app` (already configured in `capacitor.config.ts`)
-2. Set the **Version** and **Build Number** under the General tab
-3. Add your app icon to `ios/App/App/Assets.xcassets/AppIcon.appiconset/` (1024x1024 master icon required)
-4. Select **Any iOS Device (arm64)** as the build target
-5. Go to **Product > Archive**
-6. Once the archive completes, click **Distribute App** and follow the prompts to upload to App Store Connect
 
 ## Available npm Scripts
 
-| Script           | Command         | Description                        |
-|------------------|-----------------|------------------------------------|
-| `npm run dev`    | `vite`          | Start dev server on port 3000      |
-| `npm run build`  | `vite build`    | Production build to `dist/`        |
-| `npm run preview`| `vite preview`  | Serve production build locally     |
-| `npm run clean`  | `rm -rf dist`   | Remove build output                |
-| `npm run lint`   | `tsc --noEmit`  | TypeScript type checking           |
+| Script             | Command                          | Description                          |
+|--------------------|----------------------------------|--------------------------------------|
+| `npm run dev`      | `vite`                           | Start dev server on port 3000        |
+| `npm run build`    | `vite build`                     | Production build to `dist/`          |
+| `npm run preview`  | `vite preview`                   | Serve production build (static only) |
+| `npm run pages:dev`| `wrangler pages dev dist`        | Serve build + Functions locally      |
+| `npm run deploy`   | build + `wrangler pages deploy`  | Deploy to Cloudflare Pages           |
+| `npm run clean`    | `rm -rf dist`                    | Remove build output                  |
+| `npm run lint`     | `tsc --noEmit`                   | TypeScript type checking (app)       |
+| `npm test`         | `vitest run`                     | Run unit tests                       |

@@ -11,7 +11,7 @@ import { SwipeBackWrapper } from './components/SwipeBackWrapper';
 import { AddRecipeScreen } from './screens/AddRecipeScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ExportsScreen } from './screens/ExportsScreen';
-import { getAllRecipes } from './services/recipeStore';
+import { useRecipes } from './context/RecipeContext';
 import { Recipe } from './types';
 
 export default function App() {
@@ -27,7 +27,7 @@ export default function App() {
     setEditingRecipe,
   } = useNavigation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [recipeCatalogVersion, setRecipeCatalogVersion] = useState(0);
+  const ctx = useRecipes();
 
   const navigateTo = useCallback((screen: Screen, recipe?: Recipe) => {
     if (screen === 'add' && recipe === undefined) {
@@ -44,7 +44,7 @@ export default function App() {
       setIsMenuOpen(false);
       window.scrollTo(0, 0);
     },
-    [navTo, setEditingRecipe]
+    [navTo, setEditingRecipe],
   );
 
   const handleAddRecipeBack = useCallback(() => {
@@ -52,27 +52,20 @@ export default function App() {
     const recipeForDetail = selectedRecipe;
     setEditingRecipe(null);
     if (wasEditing && recipeForDetail) {
-      navTo('detail', recipeForDetail);
+      const fresh = ctx.recipes.find(r => r.id === recipeForDetail.id);
+      navTo('detail', fresh ?? recipeForDetail);
     } else {
       navTo('library');
     }
-  }, [editingRecipe, selectedRecipe, navTo, setEditingRecipe]);
-
-  const handleRecipesSaved = useCallback(() => {
-    setRecipeCatalogVersion(v => v + 1);
-    if (editingRecipe && selectedRecipe?.id === editingRecipe.id) {
-      const fresh = getAllRecipes().find(r => r.id === editingRecipe.id);
-      if (fresh) setSelectedRecipe(fresh);
-    }
-  }, [editingRecipe, selectedRecipe, setSelectedRecipe]);
+  }, [editingRecipe, selectedRecipe, navTo, setEditingRecipe, ctx.recipes]);
 
   const handleCookingRecipeSynced = useCallback(() => {
     setSelectedRecipe(prev => {
       if (!prev) return prev;
-      const fresh = getAllRecipes().find(r => r.id === prev.id);
+      const fresh = ctx.recipes.find(r => r.id === prev.id);
       return fresh ?? prev;
     });
-  }, [setSelectedRecipe]);
+  }, [setSelectedRecipe, ctx.recipes]);
 
   return (
     <div className="min-h-screen bg-surface selection:bg-primary/20">
@@ -86,7 +79,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-6 py-12">
         <AnimatePresence mode="wait">
           {currentScreen === 'library' && (
-            <LibraryScreen navigateTo={navigateTo} recipeCatalogVersion={recipeCatalogVersion} />
+            <LibraryScreen navigateTo={navigateTo} />
           )}
 
           {currentScreen === 'detail' && selectedRecipe && (
@@ -120,7 +113,7 @@ export default function App() {
             <AddRecipeScreen
               editingRecipe={editingRecipe}
               onBack={handleAddRecipeBack}
-              onSaved={handleRecipesSaved}
+              onSaved={ctx.refreshRecipes}
             />
           )}
 
