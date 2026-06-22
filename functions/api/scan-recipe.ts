@@ -8,8 +8,11 @@
 // (`wrangler pages secret put ANTHROPIC_API_KEY`, or via the dashboard).
 
 import Anthropic from '@anthropic-ai/sdk';
+import type { Env } from '../lib/env';
+import { requireUser } from '../lib/auth';
+import { json } from '../lib/response';
 
-interface Env {
+interface ScanEnv extends Env {
   ANTHROPIC_API_KEY?: string;
 }
 
@@ -79,11 +82,8 @@ const SYSTEM_PROMPT =
   'return an empty string (or empty array). Do not invent ingredients or steps that ' +
   'are not in the photo. Write a brief one-sentence summary of the dish.';
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+function jsonResponse(body: unknown, status = 200): Response {
+  return json(body, status);
 }
 
 /** Split a data URL or bare base64 string into Claude's image source fields. */
@@ -100,9 +100,12 @@ function parseImage(input: string): { mediaType: ImageMediaType; data: string } 
   return { mediaType: 'image/jpeg', data: input };
 }
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<ScanEnv> = async ({ request, env }) => {
+  const userOrResponse = await requireUser(env, request);
+  if (userOrResponse instanceof Response) return userOrResponse;
+
   if (!env.ANTHROPIC_API_KEY) {
-    return json({ error: 'Photo scanning is not configured on this server.' }, 503);
+    return jsonResponse({ error: 'Photo scanning is not configured on this server.' }, 503);
   }
 
   let imageBase64: unknown;
@@ -110,12 +113,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const body = (await request.json()) as { imageBase64?: unknown };
     imageBase64 = body.imageBase64;
   } catch {
-    return json({ error: 'Invalid request body.' }, 400);
+    return jsonResponse({ error: 'Invalid request body.' }, 400);
   }
 
   const image = parseImage(imageBase64 as string);
   if (!image) {
-    return json({ error: 'No image provided.' }, 400);
+    return jsonResponse({ error: 'No image provided.' }, 400);
   }
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -144,23 +147,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
 
     if (message.stop_reason === 'refusal') {
-      return json({ error: 'The image could not be processed. Try a clearer photo.' }, 422);
+      return jsonResponse({ error: 'The image could not be processed. Try a clearer photo.' }, 422);
     }
 
     const textBlock = message.content.find(
       (b): b is Anthropic.TextBlock => b.type === 'text',
     );
     if (!textBlock) {
-      return json({ error: 'Could not read a recipe from that image.' }, 422);
+      return jsonResponse({ error: 'Could not read a recipe from that image.' }, 422);
     }
 
     const parsed = JSON.parse(textBlock.text);
-    return json(parsed);
+    return jsonResponse(parsed);
   } catch (e) {
     const status = (e as { status?: number })?.status;
     if (status === 429) {
-      return json({ error: 'The scanning service is busy. Please try again in a moment.' }, 429);
+      return jsonResponse({ error: 'The scanning service is busy. Please try again in a moment.' }, 429);
     }
-    return json({ error: 'Scan failed. Please try again.' }, 502);
+    return jsonResponse({ error: 'Scan failed. Please try again.' }, 502);
   }
 };

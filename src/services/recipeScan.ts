@@ -42,6 +42,7 @@ export async function scanRecipeFromImage(imageBase64: string): Promise<ScanReci
   try {
     res = await fetch('/api/scan-recipe', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageBase64 }),
     });
@@ -56,6 +57,9 @@ export async function scanRecipeFromImage(imageBase64: string): Promise<ScanReci
       if (body?.error) message = body.error;
     } catch {
       // non-JSON error body — keep the default message
+    }
+    if (res.status === 401) {
+      message = 'Please sign in to scan recipe photos.';
     }
     if (res.status === 503) {
       message = 'Photo scanning is not configured on this server yet.';

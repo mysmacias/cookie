@@ -119,7 +119,7 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
             steps={form.steps}
             isEdit={form.isEdit}
             onBack={() => form.setWizardStep(3)}
-            onSubmit={() => form.submit(onBack)}
+            onSubmit={() => void form.submit(onBack)}
           />
         )}
       </motion.div>

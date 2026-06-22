@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev:full": "npm run build && wrangler pages dev dist --local --proxy 3000 --port 8788",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",

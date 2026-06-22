@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Menu, X } from 'lucide-react';
+import { Plus, Menu, X, LogOut } from 'lucide-react';
 import { Screen } from '../hooks/useNavigation';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   currentScreen: Screen;
@@ -11,6 +12,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMenuOpen, setIsMenuOpen }) => {
+  const auth = useAuth();
   useEffect(() => {
     if (!isMenuOpen) return;
     const handleKey = (e: KeyboardEvent) => {
@@ -35,9 +37,21 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
             <button onClick={() => navigateTo('library')} className={currentScreen === 'library' ? 'text-primary font-bold' : 'hover:text-primary'}>The Library</button>
             <button onClick={() => navigateTo('exports')} className={currentScreen === 'exports' ? 'text-primary font-bold' : 'hover:text-primary'}>My books</button>
             <button onClick={() => navigateTo('about')} className={currentScreen === 'about' ? 'text-primary font-bold' : 'hover:text-primary'}>About</button>
+            {auth.user && (
+              <span className="text-on-surface-variant normal-case tracking-normal font-body text-xs max-w-[140px] truncate" title={auth.user.email}>
+                {auth.user.name || auth.user.email}
+              </span>
+            )}
             <button onClick={() => navigateTo('add')} className="flex items-center space-x-2 bg-primary text-on-primary px-5 py-2.5 rounded-full hover:bg-primary-container transition-colors">
               <Plus size={16} />
               <span>Add Recipe</span>
+            </button>
+            <button
+              onClick={() => void auth.logout()}
+              className="flex items-center space-x-2 hover:text-secondary transition-colors"
+              title="Sign out"
+            >
+              <LogOut size={16} />
             </button>
           </div>
 
@@ -90,6 +104,19 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
                 className={currentScreen === 'add' ? 'text-primary font-bold' : 'text-left hover:text-primary'}
               >
                 Add Recipe
+              </button>
+              {auth.user && (
+                <p className="text-base not-italic font-body text-on-surface-variant pt-4 border-t border-outline-variant/30">
+                  Signed in as {auth.user.name || auth.user.email}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void auth.logout()}
+                className="text-left text-secondary hover:opacity-80 flex items-center gap-3"
+              >
+                <LogOut size={22} />
+                Sign out
               </button>
             </nav>
           </motion.div>

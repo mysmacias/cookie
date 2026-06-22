@@ -33,7 +33,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
   const applyHeroImage = useCallback((dataUrl: string) => {
     const next = dataUrl.trim();
     if (!next) return;
-    ctx.updateRecipe({ ...recipe, image: next });
+    void ctx.updateRecipe({ ...recipe, image: next });
     onRecipeImageChanged();
     setImageMenuOpen(false);
   }, [recipe, onRecipeImageChanged, ctx]);

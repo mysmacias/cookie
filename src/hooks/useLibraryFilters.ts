@@ -153,7 +153,7 @@ export function useLibraryFilters() {
   const selectedCount = selectedRecipes.length;
 
   const handleToggleBookmark = useCallback((id: string) => {
-    ctx.toggleBookmark(id);
+    void ctx.toggleBookmark(id);
   }, [ctx.toggleBookmark]);
 
   const toggleSelect = useCallback((id: string) => {

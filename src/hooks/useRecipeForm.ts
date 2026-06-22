@@ -106,7 +106,7 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
       const snap = formSnapRef.current;
       if (!snap.editId || snap.editId !== id) return;
       if (!snap.payload.title.trim()) return;
-      ctx.updateRecipe({ id, isHeirloom, ...snap.payload });
+      void ctx.updateRecipe({ id, isHeirloom, ...snap.payload });
       onSavedRef.current?.();
     }, 420);
     return () => clearTimeout(timer);
@@ -114,7 +114,7 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
 
   const persistEditNow = useCallback(() => {
     if (!editingRecipe?.id || !title.trim()) return;
-    ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: !!editingRecipe.isHeirloom, ...buildPayload() });
+    void ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: !!editingRecipe.isHeirloom, ...buildPayload() });
     onSavedRef.current?.();
   }, [editingRecipe, title, buildPayload]);
 
@@ -123,7 +123,7 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     return () => {
       const { editId, isHeirloom, payload } = formSnapRef.current;
       if (!editId || !payload.title.trim()) return;
-      ctx.updateRecipe({ id: editId, isHeirloom, ...payload });
+      void ctx.updateRecipe({ id: editId, isHeirloom, ...payload });
       onSavedRef.current?.();
     };
   }, []);
@@ -177,13 +177,13 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     setSteps(prev => prev.filter((_, i) => i !== idx));
   }, []);
 
-  const submit = useCallback((onBack: () => void) => {
+  const submit = useCallback(async (onBack: () => void) => {
     const payload = buildPayload();
     if (editingRecipe) {
-      ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: editingRecipe.isHeirloom, ...payload });
+      await ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: editingRecipe.isHeirloom, ...payload });
       onSavedRef.current?.();
     } else {
-      ctx.addRecipe(payload);
+      await ctx.addRecipe(payload);
       onSavedRef.current?.();
     }
     onBack();
