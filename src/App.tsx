@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useNavigation, Screen } from './hooks/useNavigation';
+import { useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LibraryScreen } from './screens/LibraryScreen';
@@ -11,10 +12,12 @@ import { SwipeBackWrapper } from './components/SwipeBackWrapper';
 import { AddRecipeScreen } from './screens/AddRecipeScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ExportsScreen } from './screens/ExportsScreen';
+import { AuthScreen } from './screens/AuthScreen';
 import { useRecipes } from './context/RecipeContext';
 import { Recipe } from './types';
 
 export default function App() {
+  const auth = useAuth();
   const {
     currentScreen,
     selectedRecipe,
@@ -66,6 +69,18 @@ export default function App() {
       return fresh ?? prev;
     });
   }, [setSelectedRecipe, ctx.recipes]);
+
+  if (auth.isLoading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <p className="text-on-surface-variant font-label uppercase tracking-widest text-sm">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!auth.isAuthenticated) {
+    return <AuthScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-surface selection:bg-primary/20">

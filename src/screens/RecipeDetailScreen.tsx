@@ -30,7 +30,7 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
   const { showToast } = useToast();
 
   const handleToggleBookmark = () => {
-    ctx.toggleBookmark(recipe.id);
+    void ctx.toggleBookmark(recipe.id);
   };
 
   return (

@@ -41,7 +41,7 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
         else delete next.photo;
         return next;
       });
-      ctx.updateRecipe({ ...recipe, steps: nextSteps });
+      void ctx.updateRecipe({ ...recipe, steps: nextSteps });
       onRecipeSynced?.();
       void haptic('light');
     },
