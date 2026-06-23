@@ -13,6 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "pages:dev": "wrangler pages dev dist",
+    "seed:recipes:mediterranean": "node scripts/fetch-recipe-api-recipes.mjs --limit=12",
+    "seed:recipes:themealdb:mediterranean": "node scripts/fetch-themealdb-recipes.mjs --limit=24",
     "deploy": "npm run build && wrangler pages deploy dist"
   },
   "dependencies": {
