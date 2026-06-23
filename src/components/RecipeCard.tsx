@@ -12,6 +12,7 @@ interface RecipeCardProps {
   onToggleBookmark: () => void;
   onRecipeImageChanged: () => void;
   onClick: () => void;
+  onCookTonight?: () => void;
   selectionMode?: boolean;
   selected?: boolean;
   onSelectToggle?: () => void;
@@ -23,6 +24,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
   onToggleBookmark,
   onRecipeImageChanged,
   onClick,
+  onCookTonight,
   selectionMode = false,
   selected = false,
   onSelectToggle,
@@ -159,6 +161,17 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
           >
             {selected ? <Check size={18} strokeWidth={3} /> : null}
           </div>
+        ) : onCookTonight ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCookTonight();
+            }}
+            className="absolute bottom-4 right-4 z-10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-primary text-on-primary px-3 py-1.5 rounded-full text-[9px] font-label uppercase tracking-widest font-bold shadow-md"
+          >
+            Cook tonight
+          </button>
         ) : null}
       </div>
       <div className="space-y-2">

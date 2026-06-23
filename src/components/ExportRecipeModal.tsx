@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { X, FileDown, Copy, Loader2 } from 'lucide-react';
 import type { Recipe } from '../types';
 import type { ExportOptions } from '../export/types';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import {
   buildCookbookMarkdown,
   buildRecipeMarkdown,
@@ -60,6 +61,7 @@ export const ExportRecipeModal: React.FC<ExportRecipeModalProps> = ({
 }) => {
   const [options, setOptions] = useState<ExportOptions>(() => loadExportOptions());
   const [busy, setBusy] = useState<string | null>(null);
+  const trapRef = useFocusTrap(open, onClose);
 
   useEffect(() => {
     if (open) setOptions(loadExportOptions());
@@ -157,6 +159,7 @@ export const ExportRecipeModal: React.FC<ExportRecipeModalProps> = ({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        ref={trapRef}
         className="w-full sm:max-w-lg max-h-[90vh] overflow-y-auto bg-surface border-t sm:border border-outline-variant sm:rounded-2xl shadow-2xl rounded-t-2xl"
         onClick={(e) => e.stopPropagation()}
       >

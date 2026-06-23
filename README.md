@@ -9,8 +9,10 @@ A curated recipe web app for the modern home cook, designed with editorial elega
 - **Tailwind CSS v4** — Styling with custom design tokens
 - **Motion** — Fluid animations and transitions
 - **Cloudflare Pages** — Static hosting + serverless Functions
-- **Claude (Anthropic API)** — Recipe photo scanning (via a Pages Function)
-- **localStorage / IndexedDB** — Local data persistence (recipes, bookmarks, exports)
+- **Cloudflare D1** — User accounts, recipes, bookmarks, collections, shopping lists
+- **Cloudflare R2** — Recipe and step image storage (optional binding)
+- **Claude (Anthropic API)** — Recipe photo scanning
+- **IndexedDB** — Local export library ("My books")
 
 ## Getting Started
 
@@ -21,67 +23,78 @@ npm run dev
 
 The dev server runs at `http://localhost:3000`.
 
-> The recipe photo-scan feature calls the `/api/scan-recipe` Pages Function, which
-> only runs under Cloudflare's runtime. Use `npm run pages:dev` (after a build) to
-> exercise it locally; `npm run dev` serves the UI but the scan endpoint won't be
-> available.
+> Auth, recipes, collections, and shopping lists require Cloudflare Functions + D1.
+> Use `npm run dev:full` to test the full stack locally. See [RUN_INSTRUCTIONS.md](RUN_INSTRUCTIONS.md).
 
 ## Building & Deploying
 
 ```bash
-npm run build            # outputs static site to dist/
+npm run build            # outputs static site to dist/ + service worker
 npm run deploy           # builds, then deploys to Cloudflare Pages
 ```
 
-The serverless code lives in `functions/` and is deployed automatically by
-Cloudflare Pages alongside the static assets.
+Apply D1 migrations after schema changes:
 
-### Required secret
+```bash
+npx wrangler d1 migrations apply cookie-db --local
+npx wrangler d1 migrations apply cookie-db --remote
+```
 
-The photo-scan Function needs an Anthropic API key:
+### Required secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `ANTHROPIC_API_KEY` | Photo-scan (`/api/scan-recipe`) |
+| `RECIPE_API_KEY` | Discover / import from recipeapi.io |
+
+OAuth (optional): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
 
 ```bash
 npx wrangler pages secret put ANTHROPIC_API_KEY
 ```
 
-(or set it in the Cloudflare dashboard → Pages → your project → Settings →
-Environment variables). Without it, the rest of the app works and the scan
-endpoint returns a clear "not configured" message.
+### R2 media bucket
+
+Create an R2 bucket named `cookie-media` and bind it as `MEDIA_BUCKET` in `wrangler.toml`.
+Without it, images are stored inline in recipe JSON (works, but not ideal at scale).
 
 ## Project Structure
 
 ```
 src/
-├── App.tsx                  # Root orchestrator
-├── main.tsx                 # Entry point
-├── index.css                # Tailwind + design tokens + bundled fonts
-├── types.ts                 # Recipe domain types
-├── constants/               # App-wide constants
-├── context/                 # RecipeContext provider
-├── hooks/                   # Navigation, timers, filters, image picking, forms
-├── components/              # Header, Footer, RecipeCard, UI primitives, ...
-├── screens/                 # Library, Recipe Detail, Cooking Mode, Add Recipe, ...
+├── App.tsx                  # Root orchestrator + URL routing
+├── screens/                 # Library, Detail, Cooking, Discover, Shopping, Collections, …
+├── hooks/                   # Navigation, timers, filters, a11y helpers
+├── services/                # API clients (auth, recipes, collections, media)
 ├── export/                  # PDF + Markdown export pipeline
-├── services/
-│   ├── recipeStore.ts       # localStorage persistence layer
-│   ├── webExportStore.ts    # IndexedDB store for generated exports
-│   └── recipeScan.ts        # Client for the /api/scan-recipe Function
-└── utils/                   # haptics (Vibration API), file helpers, ...
+└── components/              # Header, RecipeCard, UI primitives
 
 functions/
-└── api/scan-recipe.ts       # Cloudflare Pages Function: Claude vision recipe scan
+├── api/                     # Auth, recipes, collections, shopping-list, media, scan
+└── lib/                     # Auth, DB, validation, rate limiting
+
+migrations/                  # D1 schema
 ```
 
 ## Features
 
-- Curated recipe library with search and category filters
-- Editorial recipe detail pages with chef's notes
-- Interactive cooking mode with real countdown timers and step photos
-- Multi-step recipe submission form
-- **Scan a recipe from a photo** — upload a photo and Claude fills the form
-- Bookmark system with filtered view
-- Export recipes to PDF / Markdown, saved to "My books" and shareable
-- Installable PWA with bundled fonts and offline-friendly local storage
+- **Account-required** curated recipe library with search, category/tag filters, bookmarks
+- **Shareable URLs** — `/recipe/:id`, `/recipe/:id/cook`, `/books`, `/shopping`, `/collections`
+- **Cooking mode** — timers, step photos, kitchen display, wake lock, keyboard shortcuts
+- **Discover** — search and import recipes from recipeapi.io
+- **Collections** — named bookshelves with PDF export
+- **Shopping list** — merged ingredients, synced to D1
+- **Export** — PDF / Markdown to "My books"
+- **PWA** — installable with offline shell caching via service worker
+- **Photo scan** — Claude vision fills the add-recipe form
+
+## Testing
+
+```bash
+npm run test
+npm run test:watch
+npm run lint
+```
 
 ## License
 

@@ -30,3 +30,21 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 export async function logout(): Promise<void> {
   await apiFetch('/api/auth/logout', { method: 'POST' });
 }
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiFetch('/api/auth/request-password-reset', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await apiFetch('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
+  });
+}
+
+export async function deleteAccount(): Promise<void> {
+  await apiFetch('/api/user/account', { method: 'DELETE' });
+}

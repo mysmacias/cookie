@@ -8,6 +8,6 @@ export function json(body: unknown, status = 200, extraHeaders?: HeadersInit): R
   });
 }
 
-export function error(message: string, status = 400): Response {
-  return json({ error: message }, status);
+export function error(message: string, status = 400, code?: string): Response {
+  return json({ error: message, code: code ?? 'error' }, status);
 }

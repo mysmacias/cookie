@@ -19,6 +19,8 @@ export const Footer: React.FC<FooterProps> = ({ navigateTo }) => {
           <h4 className="text-xs font-label uppercase tracking-widest mb-6 opacity-50">Explore</h4>
           <ul className="space-y-4 text-sm">
             <li><button onClick={() => navigateTo('library')}>Library</button></li>
+            <li><button onClick={() => navigateTo('shopping')}>Shopping list</button></li>
+            <li><button onClick={() => navigateTo('collections')}>Collections</button></li>
             <li><button onClick={() => navigateTo('exports')}>My books</button></li>
             <li><button onClick={() => navigateTo('about')}>Our Story</button></li>
             <li><button onClick={() => navigateTo('add')}>Submit Recipe</button></li>

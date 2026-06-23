@@ -96,9 +96,11 @@ export function useLibraryFilters() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'bookmarked'>('all');
   const [sort, setSort] = useState<LibrarySort>(savedSort);
-  const [gridCols, setGridCols] = useState(savedGridCols);
+  const [gridCols, setGridColsState] = useState(savedGridCols);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Record<string, true>>({});
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
 
   const tierIndexRef = useRef(colsToTierIndex(gridCols));
   const gridContainerRef = useRef<HTMLDivElement>(null);
@@ -111,7 +113,7 @@ export function useLibraryFilters() {
     if (clamped === tierIndexRef.current) return;
     tierIndexRef.current = clamped;
     const cols = TIERS[clamped].cols;
-    setGridCols(cols);
+    setGridColsState(cols);
     try { localStorage.setItem(GRID_KEY, String(cols)); } catch { /* ignore */ }
     haptic('light');
   }, []);
@@ -137,13 +139,45 @@ export function useLibraryFilters() {
 
   const bookmarkedSet = useMemo(() => new Set(bookmarkedIds), [bookmarkedIds]);
 
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of recipes) set.add(r.category);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [recipes]);
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of recipes) {
+      for (const t of r.tags ?? []) set.add(t);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [recipes]);
+
+  const toggleTagFilter = useCallback((tag: string) => {
+    setTagFilters(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag],
+    );
+  }, []);
+
+  const setGridCols = useCallback((cols: number) => {
+    const clamped = Math.max(1, Math.min(4, cols));
+    tierIndexRef.current = colsToTierIndex(clamped);
+    setGridColsState(clamped);
+    try { localStorage.setItem(GRID_KEY, String(clamped)); } catch { /* ignore */ }
+    haptic('light');
+  }, []);
+
   const filteredRecipes = useMemo(() =>
     recipes
       .filter(r => recipeMatchesSearch(searchQuery, r))
       .filter(r => filter === 'all' || bookmarkedSet.has(r.id))
+      .filter(r => !categoryFilter || r.category === categoryFilter)
+      .filter(r => tagFilters.length === 0 || tagFilters.every(t =>
+        r.tags?.some(rt => rt.toLowerCase() === t.toLowerCase()),
+      ))
       .slice()
       .sort((a, b) => compareRecipes(a, b, sort)),
-    [recipes, searchQuery, filter, sort, bookmarkedSet],
+    [recipes, searchQuery, filter, sort, bookmarkedSet, categoryFilter, tagFilters],
   );
 
   const selectedRecipes = useMemo(
@@ -191,7 +225,9 @@ export function useLibraryFilters() {
     selectedIds, toggleSelect, exitSelectionMode,
     filteredRecipes, selectedRecipes, selectedCount,
     bookmarkedIds, bookmarkedSet, handleToggleBookmark,
-    gridContainerRef, gridScale, gridColsClass,
+    gridContainerRef, gridScale, gridColsClass, gridCols, setGridCols,
+    categories, categoryFilter, setCategoryFilter,
+    allTags, tagFilters, toggleTagFilter,
     refreshRecipes,
   };
 }

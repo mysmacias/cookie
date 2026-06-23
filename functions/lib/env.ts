@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  MEDIA_BUCKET?: R2Bucket;
   RECIPE_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_CLIENT_ID?: string;

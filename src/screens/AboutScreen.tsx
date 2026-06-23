@@ -15,13 +15,8 @@ export const AboutScreen: React.FC = () => {
         </p>
       </div>
 
-      <div className="aspect-video rounded-2xl overflow-hidden editorial-shadow">
-        <img 
-          src="https://picsum.photos/seed/kitchen/1200/800" 
-          alt="Kitchen" 
-          className="w-full h-full object-cover"
-          referrerPolicy="no-referrer"
-        />
+      <div className="aspect-video rounded-2xl overflow-hidden editorial-shadow bg-gradient-to-br from-primary/30 via-surface-container to-secondary/20 flex items-center justify-center">
+        <p className="text-6xl md:text-8xl font-headline italic text-primary/40 select-none">COOKIE</p>
       </div>
 
       <div className="max-w-2xl mx-auto space-y-6">

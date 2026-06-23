@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
 import { ApiError } from '../services/apiClient';
+import * as authService from '../services/authService';
 
 type AuthMode = 'login' | 'signup';
 
@@ -43,6 +44,7 @@ export const AuthScreen: React.FC = () => {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -197,6 +199,32 @@ export const AuthScreen: React.FC = () => {
 
             {error && (
               <p className="text-sm text-secondary" role="alert">{error}</p>
+            )}
+
+            {resetSent && (
+              <p className="text-sm text-primary" role="status">If an account exists, reset instructions were sent.</p>
+            )}
+
+            {mode === 'login' && (
+              <button
+                type="button"
+                className="text-xs font-label uppercase tracking-widest text-on-surface-variant hover:text-primary"
+                onClick={async () => {
+                  if (!email.trim()) {
+                    setError('Enter your email first.');
+                    return;
+                  }
+                  setError(null);
+                  try {
+                    await authService.requestPasswordReset(email);
+                    setResetSent(true);
+                  } catch {
+                    setError('Could not request password reset.');
+                  }
+                }}
+              >
+                Forgot password?
+              </button>
             )}
 
             <Button
