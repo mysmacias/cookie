@@ -1,6 +1,7 @@
 import type { Env } from '../../lib/env';
 import { requireUser } from '../../lib/auth';
 import { error, json } from '../../lib/response';
+import { parseCollectionName } from '../../lib/validation';
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
   const userOrResponse = await requireUser(env, request);
@@ -32,7 +33,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     return error('Invalid request body.');
   }
 
-  const name = body.name?.trim() ?? '';
+  const name = parseCollectionName(body.name);
   if (!name) return error('Collection name required.');
 
   const result = await env.DB.prepare(

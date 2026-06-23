@@ -11,6 +11,38 @@ import { error, json } from '../../lib/response';
 
 const TOKEN_HOURS = 1;
 
+function resetBaseUrl(request: Request, env: Env): string {
+  const configured = env.APP_URL?.trim().replace(/\/+$/, '');
+  if (configured) return configured;
+  const url = new URL(request.url);
+  return url.origin;
+}
+
+async function sendPasswordResetEmail(env: Env, to: string, resetUrl: string): Promise<boolean> {
+  const from = env.EMAIL_FROM?.trim();
+  if (!env.EMAIL || !from) return false;
+
+  await env.EMAIL.send({
+    to,
+    from,
+    subject: 'Reset your COOKIE password',
+    text: [
+      'You requested a password reset for COOKIE.',
+      '',
+      `Reset your password here: ${resetUrl}`,
+      '',
+      'This link expires in 1 hour. If you did not request this, you can ignore this email.',
+    ].join('\n'),
+    html: [
+      '<p>You requested a password reset for COOKIE.</p>',
+      `<p><a href="${resetUrl}">Reset your password</a></p>`,
+      '<p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>',
+    ].join(''),
+  });
+
+  return true;
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const rate = await checkRateLimit(env, `reset:${clientIp(request)}`, 5);
   if (!rate.ok) return error('Too many requests. Try again later.', 429, 'rate_limited');
@@ -40,7 +72,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     'INSERT INTO password_reset_tokens (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
   ).bind(token, user.id, expiresAt, now).run();
 
-  // Email delivery is not configured; token returned only in non-production for dev testing.
   const isProd = request.url.startsWith('https://') && !request.url.includes('localhost');
+  const resetUrl = `${resetBaseUrl(request, env)}/reset?token=${encodeURIComponent(token)}`;
+
+  try {
+    await sendPasswordResetEmail(env, email, resetUrl);
+  } catch {
+    if (isProd) return json({ ok: true });
+  }
+
   return json(isProd ? { ok: true } : { ok: true, devToken: token });
 };

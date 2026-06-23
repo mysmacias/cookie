@@ -13,6 +13,10 @@ migrations_dir = "migrations"
 binding = "MEDIA_BUCKET"
 bucket_name = "cookie-media"
 
+send_email = [
+  { name = "EMAIL" }
+]
+
 # Secrets (set per environment, not committed):
 #   npx wrangler pages secret put ANTHROPIC_API_KEY
 # Used by functions/api/scan-recipe.ts for the photo-scan feature.

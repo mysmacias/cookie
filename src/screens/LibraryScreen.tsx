@@ -15,9 +15,10 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 interface LibraryScreenProps {
   navigateTo: (screen: Screen, recipe?: Recipe) => void;
   startCooking: (recipe: Recipe) => void;
+  onCookTogether?: (recipeIds: string[]) => void;
 }
 
-export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startCooking }) => {
+export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startCooking, onCookTogether }) => {
   const lib = useLibraryFilters();
   const { showToast } = useToast();
   const { isLoading } = useRecipes();
@@ -64,6 +65,18 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
         filteredCount={lib.filteredRecipes.length}
         onExportList={() => openExport(lib.filteredRecipes)}
         onExportSelected={() => openExport(lib.selectedRecipes)}
+        onCookTogether={
+          onCookTogether
+            ? () => {
+                const ids = lib.selectedRecipes.map(r => r.id);
+                if (ids.length >= 2 && ids.length <= 4) {
+                  lib.exitSelectionMode();
+                  onCookTogether(ids);
+                }
+              }
+            : undefined
+        }
+        cookTogetherCount={lib.selectedCount}
         onAddRecipe={() => navigateTo('add')}
         onDiscover={() => navigateTo('discover')}
         gridCols={lib.gridCols}

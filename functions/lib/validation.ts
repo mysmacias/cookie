@@ -20,9 +20,79 @@ export interface RecipePayload {
   }[];
   chefNote?: string;
   isHeirloom?: boolean;
+  sourceUrl?: string;
 }
 
 const DIFFICULTIES = new Set(['Easy', 'Medium', 'Advanced', 'Expert']);
+
+export interface ShoppingListItemPayload {
+  id: string;
+  name: string;
+  amount: string;
+  checked: boolean;
+  recipeIds: string[];
+  aisle?: string;
+}
+
+export interface MealPlanDayPayload {
+  date: string;
+  recipeIds: string[];
+}
+
+export interface MealPlanPayload {
+  days: MealPlanDayPayload[];
+}
+
+export function parseCollectionName(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const name = v.trim();
+  if (!name || name.length > 120) return null;
+  return name;
+}
+
+export function parseShoppingListItems(v: unknown): ShoppingListItemPayload[] | null {
+  if (!Array.isArray(v)) return null;
+  const items: ShoppingListItemPayload[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') return null;
+    const o = raw as Record<string, unknown>;
+    if (typeof o.id !== 'string' || !o.id.trim()) return null;
+    if (typeof o.name !== 'string' || !o.name.trim() || o.name.length > 200) return null;
+    if (typeof o.amount !== 'string' || o.amount.length > 200) return null;
+    if (typeof o.checked !== 'boolean') return null;
+    if (!Array.isArray(o.recipeIds) || !o.recipeIds.every((id): id is string => typeof id === 'string')) {
+      return null;
+    }
+    items.push({
+      id: o.id.trim(),
+      name: o.name.trim(),
+      amount: o.amount.trim(),
+      checked: o.checked,
+      recipeIds: o.recipeIds,
+      aisle: typeof o.aisle === 'string' ? o.aisle.trim().slice(0, 80) : undefined,
+    });
+  }
+  if (items.length > 500) return null;
+  return items;
+}
+
+export function parseMealPlanPayload(v: unknown): MealPlanPayload | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  if (!Array.isArray(o.days)) return null;
+  const days: MealPlanDayPayload[] = [];
+  for (const day of o.days) {
+    if (!day || typeof day !== 'object') return null;
+    const d = day as Record<string, unknown>;
+    if (typeof d.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) return null;
+    if (!Array.isArray(d.recipeIds) || !d.recipeIds.every((id): id is string => typeof id === 'string')) {
+      return null;
+    }
+    days.push({ date: d.date, recipeIds: d.recipeIds.slice(0, 20) });
+  }
+  if (days.length > 60) return null;
+  return { days };
+}
 
 export function parseRecipePayload(v: unknown): RecipePayload | null {
   if (!v || typeof v !== 'object') return null;
@@ -78,5 +148,6 @@ export function parseRecipePayload(v: unknown): RecipePayload | null {
     steps: steps as RecipePayload['steps'],
     chefNote: typeof o.chefNote === 'string' ? o.chefNote : undefined,
     isHeirloom: o.isHeirloom === true,
+    sourceUrl: typeof o.sourceUrl === 'string' && o.sourceUrl.trim() ? o.sourceUrl.trim() : undefined,
   };
 }

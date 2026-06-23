@@ -33,4 +33,6 @@ export interface Recipe {
   isHeirloom?: boolean;
   /** Unix ms when the recipe was first added to the library */
   addedAt?: number;
+  /** Original page URL when imported from the web */
+  sourceUrl?: string;
 }

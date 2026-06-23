@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, SquareCheck, ListX, ArrowUpDown, Sparkles, LayoutGrid } from 'lucide-react';
+import { Plus, Search, SquareCheck, ListX, ArrowUpDown, Sparkles, LayoutGrid, ChefHat } from 'lucide-react';
 import { SORT_OPTIONS, type LibrarySort } from '../hooks/useLibraryFilters';
 import type { Recipe } from '../types';
 
@@ -17,6 +17,8 @@ interface LibraryToolbarProps {
   filteredCount: number;
   onExportList: () => void;
   onExportSelected: () => void;
+  onCookTogether?: () => void;
+  cookTogetherCount?: number;
   onAddRecipe: () => void;
   onDiscover?: () => void;
   gridCols: number;
@@ -30,6 +32,7 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
   selectionMode, setSelectionMode,
   selectedCount, exitSelectionMode,
   filteredCount, onExportList, onExportSelected,
+  onCookTogether, cookTogetherCount = 0,
   onAddRecipe, onDiscover,
   gridCols, setGridCols,
 }) => (
@@ -56,6 +59,8 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
 
     <div className="flex flex-wrap items-center gap-3">
       <button
+        type="button"
+        aria-pressed={filter === 'all'}
         onClick={() => setFilter('all')}
         className={
           filter === 'all'
@@ -66,6 +71,8 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
         All Recipes
       </button>
       <button
+        type="button"
+        aria-pressed={filter === 'bookmarked'}
         onClick={() => setFilter('bookmarked')}
         className={
           filter === 'bookmarked'
@@ -123,6 +130,17 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
           >
             Export selected ({selectedCount})
           </button>
+          {onCookTogether ? (
+            <button
+              type="button"
+              onClick={onCookTogether}
+              disabled={cookTogetherCount < 2 || cookTogetherCount > 4}
+              className="border border-secondary text-secondary px-4 py-2 rounded-full text-xs font-label uppercase tracking-widest font-bold disabled:opacity-45 flex items-center gap-2"
+            >
+              <ChefHat size={14} />
+              Cook together ({cookTogetherCount})
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={exitSelectionMode}

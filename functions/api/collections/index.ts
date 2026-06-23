@@ -1,6 +1,8 @@
 import type { Env } from '../../lib/env';
 import { requireUser, generateId } from '../../lib/auth';
+import { checkRateLimit } from '../../lib/rateLimit';
 import { error, json } from '../../lib/response';
+import { parseCollectionName } from '../../lib/validation';
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const userOrResponse = await requireUser(env, request);
@@ -21,6 +23,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userOrResponse = await requireUser(env, request);
   if (userOrResponse instanceof Response) return userOrResponse;
 
+  const rate = await checkRateLimit(env, `collections:${userOrResponse.id}`, 20);
+  if (!rate.ok) return error('Too many requests. Try again later.', 429, 'rate_limited');
+
   let body: { name?: string };
   try {
     body = await request.json() as { name?: string };
@@ -28,7 +33,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return error('Invalid request body.');
   }
 
-  const name = body.name?.trim() ?? '';
+  const name = parseCollectionName(body.name);
   if (!name) return error('Collection name required.');
 
   const id = generateId();

@@ -134,21 +134,22 @@ export const RecipeFormBasics: React.FC<RecipeFormBasicsProps> = ({
       </div>
 
       <div className="space-y-2">
-        <Label as="label">Recipe Title</Label>
-        <Input placeholder="e.g. Grandma's Famous Shortbread" value={title} onChange={e => setTitle(e.target.value)} />
+        <Label as="label" htmlFor="recipe-title">Recipe Title</Label>
+        <Input id="recipe-title" placeholder="e.g. Grandma's Famous Shortbread" value={title} onChange={e => setTitle(e.target.value)} />
       </div>
       <div className="space-y-2">
-        <Label as="label">Description</Label>
-        <Textarea className="h-32" placeholder="Tell us the story behind this dish..." value={description} onChange={e => setDescription(e.target.value)} />
+        <Label as="label" htmlFor="recipe-description">Description</Label>
+        <Textarea id="recipe-description" className="h-32" placeholder="Tell us the story behind this dish..." value={description} onChange={e => setDescription(e.target.value)} />
       </div>
       <div className="grid grid-cols-2 gap-8">
         <div className="space-y-2">
-          <Label as="label">Prep Time</Label>
-          <Input placeholder="20 mins" value={prepTime} onChange={e => setPrepTime(e.target.value)} />
+          <Label as="label" htmlFor="recipe-prep-time">Prep Time</Label>
+          <Input id="recipe-prep-time" placeholder="20 mins" value={prepTime} onChange={e => setPrepTime(e.target.value)} />
         </div>
         <div className="space-y-2">
-          <Label as="label">Difficulty</Label>
+          <Label as="label" htmlFor="recipe-difficulty">Difficulty</Label>
           <select
+            id="recipe-difficulty"
             className="w-full bg-surface border-none p-4 rounded-xl focus:ring-2 focus:ring-primary/20 appearance-none"
             value={difficulty}
             onChange={e => setDifficulty(e.target.value as Recipe['difficulty'])}

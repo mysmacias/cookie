@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { motion } from 'motion/react';
-import { ChevronLeft, Plus, BookOpen, Trash2 } from 'lucide-react';
+import { Plus, BookOpen, Trash2 } from 'lucide-react';
 import { Screen } from '../hooks/useNavigation';
-import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
+import { ScreenShell } from '../components/ui/ScreenShell';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useRecipes } from '../context/RecipeContext';
 import {
   fetchCollections,
@@ -17,9 +17,10 @@ import type { Recipe } from '../types';
 
 interface CollectionsScreenProps {
   navigateTo: (screen: Screen, recipe?: Recipe) => void;
+  onOpenCollection?: (id: string) => void;
 }
 
-export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ navigateTo }) => {
+export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ navigateTo, onOpenCollection }) => {
   const ctx = useRecipes();
   const { showToast } = useToast();
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
@@ -27,6 +28,7 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ navigateTo
   const [exportRecipes, setExportRecipes] = useState<Recipe[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [newName, setNewName] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<CollectionSummary | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +58,7 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ navigateTo
     try {
       await deleteCollection(id);
       await load();
+      showToast('Collection deleted');
     } catch {
       showToast('Could not delete collection');
     }
@@ -79,18 +82,8 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ navigateTo
   };
 
   return (
-    <SwipeBackWrapper onBack={() => navigateTo('library')}>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-3xl mx-auto space-y-10 pb-24">
-        <button
-          type="button"
-          onClick={() => navigateTo('library')}
-          className="flex items-center gap-2 text-sm font-label uppercase tracking-widest text-on-surface-variant hover:text-primary"
-        >
-          <ChevronLeft size={16} />
-          Back to Library
-        </button>
-
-        <div className="space-y-3">
+    <ScreenShell onBack={() => navigateTo('library')} backLabel="Back to Library">
+      <div className="space-y-3">
           <p className="text-sm font-label uppercase tracking-widest text-secondary font-bold">Bookshelves</p>
           <h1 className="text-5xl md:text-7xl font-headline italic leading-none">Collections</h1>
           <p className="text-on-surface-variant">Curate themed sets of recipes and export them as cookbooks.</p>
@@ -127,12 +120,16 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ navigateTo
           <ul className="space-y-3">
             {collections.map(c => (
               <li key={c.id} className="flex items-center gap-3 rounded-2xl border border-outline-variant/30 px-5 py-4">
-                <div className="flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => onOpenCollection?.(c.id)}
+                  className="flex-1 min-w-0 text-left hover:text-primary transition-colors"
+                >
                   <p className="font-headline italic text-xl truncate">{c.name}</p>
                   <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant mt-1">
                     {c.recipe_count} recipe{c.recipe_count === 1 ? '' : 's'}
                   </p>
-                </div>
+                </button>
                 <button
                   type="button"
                   onClick={() => void handleExport(c)}
@@ -143,7 +140,7 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ navigateTo
                 <button
                   type="button"
                   aria-label={`Delete ${c.name}`}
-                  onClick={() => void handleDelete(c.id)}
+                  onClick={() => setDeleteTarget(c)}
                   className="p-3 rounded-full border border-outline-variant text-on-surface-variant hover:text-secondary"
                 >
                   <Trash2 size={16} />
@@ -152,14 +149,25 @@ export const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ navigateTo
             ))}
           </ul>
         )}
-      </motion.div>
-
       <ExportRecipeModal
         recipes={exportRecipes}
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportRecipes([]); }}
         onFeedback={showToast}
       />
-    </SwipeBackWrapper>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete collection?"
+        message={deleteTarget ? `"${deleteTarget.name}" will be removed. Recipes stay in your library.` : ''}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (deleteTarget) void handleDelete(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </ScreenShell>
   );
 };

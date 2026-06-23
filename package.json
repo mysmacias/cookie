@@ -13,6 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "pages:dev": "wrangler pages dev dist",
+    "seed:recipes:mediterranean": "node scripts/fetch-recipe-api-recipes.mjs --limit=12",
+    "seed:recipes:themealdb:mediterranean": "node scripts/fetch-themealdb-recipes.mjs --limit=24",
+    "scrape:recipes": "node scripts/scrape-recipes.mjs",
     "deploy": "npm run build && wrangler pages deploy dist"
   },
   "dependencies": {
@@ -30,8 +33,11 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.19.17",
     "autoprefixer": "^10.5.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
