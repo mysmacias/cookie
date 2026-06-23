@@ -108,6 +108,14 @@ export const onRequestPost: PagesFunction<ScanEnv> = async ({ request, env }) =>
     return jsonResponse({ error: 'Photo scanning is not configured on this server.' }, 503);
   }
 
+  const day = new Date().toISOString().slice(0, 10);
+  const usage = await env.DB.prepare(
+    'SELECT count FROM scan_usage WHERE user_id = ? AND day = ?',
+  ).bind(userOrResponse.id, day).first<{ count: number }>();
+  if (usage && usage.count >= 20) {
+    return jsonResponse({ error: 'Daily scan limit reached. Try again tomorrow.' }, 429);
+  }
+
   let imageBase64: unknown;
   try {
     const body = (await request.json()) as { imageBase64?: unknown };
@@ -158,6 +166,12 @@ export const onRequestPost: PagesFunction<ScanEnv> = async ({ request, env }) =>
     }
 
     const parsed = JSON.parse(textBlock.text);
+
+    await env.DB.prepare(
+      `INSERT INTO scan_usage (user_id, day, count) VALUES (?, ?, 1)
+       ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1`,
+    ).bind(userOrResponse.id, day).run();
+
     return jsonResponse(parsed);
   } catch (e) {
     const status = (e as { status?: number })?.status;

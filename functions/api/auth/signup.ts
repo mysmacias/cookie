@@ -8,6 +8,7 @@ import {
   isValidPassword,
   sessionCookie,
 } from '../../lib/auth';
+import { checkRateLimit, clientIp } from '../../lib/rateLimit';
 import { error, json } from '../../lib/response';
 
 interface SignupBody {
@@ -17,6 +18,9 @@ interface SignupBody {
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  const rate = await checkRateLimit(env, `signup:${clientIp(request)}`, 5);
+  if (!rate.ok) return error('Too many sign-up attempts. Try again later.', 429, 'rate_limited');
+
   let body: SignupBody;
   try {
     body = await request.json() as SignupBody;

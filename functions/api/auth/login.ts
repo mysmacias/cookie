@@ -6,6 +6,7 @@ import {
   isValidPassword,
   sessionCookie,
 } from '../../lib/auth';
+import { checkRateLimit, clientIp } from '../../lib/rateLimit';
 import { error, json } from '../../lib/response';
 
 interface LoginBody {
@@ -14,6 +15,9 @@ interface LoginBody {
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  const rate = await checkRateLimit(env, `login:${clientIp(request)}`, 10);
+  if (!rate.ok) return error('Too many login attempts. Try again later.', 429, 'rate_limited');
+
   let body: LoginBody;
   try {
     body = await request.json() as LoginBody;

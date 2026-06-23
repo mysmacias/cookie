@@ -1,5 +1,6 @@
 import { Recipe } from '../types';
 import { apiFetch } from './apiClient';
+import { prepareRecipeMedia } from './mediaUpload';
 
 const USER_RECIPES_KEY = 'cookie_user_recipes';
 const BOOKMARKS_KEY = 'cookie_bookmarks';
@@ -57,21 +58,23 @@ export async function fetchUserData(): Promise<UserDataPayload> {
 }
 
 export async function createRecipe(recipe: Omit<Recipe, 'id'>): Promise<Recipe> {
+  const prepared = await prepareRecipeMedia(recipe as Recipe);
   const data = await apiFetch<{ recipe: Recipe }>('/api/recipes', {
     method: 'POST',
-    body: JSON.stringify(recipe),
+    body: JSON.stringify(prepared),
   });
   userRecipes.push(data.recipe);
   return data.recipe;
 }
 
 export async function saveRecipe(recipe: Recipe): Promise<Recipe> {
+  const prepared = await prepareRecipeMedia(recipe);
   const data = await apiFetch<{ recipe: Recipe }>(`/api/recipes/${encodeURIComponent(recipe.id)}`, {
     method: 'PUT',
-    body: JSON.stringify(recipe),
+    body: JSON.stringify(prepared),
   });
 
-  if (recipe.id.startsWith('user_')) {
+  if (recipe.id.startsWith('user_') || recipe.id.startsWith('api_')) {
     const i = userRecipes.findIndex(r => r.id === recipe.id);
     if (i !== -1) userRecipes[i] = data.recipe;
     else userRecipes.push(data.recipe);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { 
   ChevronLeft, 
@@ -7,7 +7,11 @@ import {
   Share2, 
   Timer as TimerIcon,
   UtensilsCrossed,
-  Pencil
+  Pencil,
+  Minus,
+  Plus,
+  Printer,
+  List,
 } from 'lucide-react';
 import { Recipe } from '../types';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
@@ -15,6 +19,9 @@ import { ExportRecipeModal } from '../components/ExportRecipeModal';
 import { useToast } from '../components/ui/Toast';
 import { Label } from '../components/ui/Label';
 import { useRecipes } from '../context/RecipeContext';
+import { scaleAmount } from '../utils/servingScale';
+import { fetchCollections, addRecipeToCollection, type CollectionSummary } from '../services/collectionsApi';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface RecipeDetailScreenProps {
   recipe: Recipe;
@@ -27,23 +34,57 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
   const ctx = useRecipes();
   const bookmarked = ctx.isBookmarked(recipe.id);
   const [exportOpen, setExportOpen] = useState(false);
+  const [servings, setServings] = useState(1);
+  const [collections, setCollections] = useState<CollectionSummary[]>([]);
+  const [showCollections, setShowCollections] = useState(false);
   const { showToast } = useToast();
+  const reducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    void fetchCollections().then(setCollections).catch(() => {});
+  }, []);
 
   const handleToggleBookmark = () => {
     void ctx.toggleBookmark(recipe.id);
   };
 
+  const shareRecipe = async () => {
+    const url = `${window.location.origin}/recipe/${encodeURIComponent(recipe.id)}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: recipe.title, text: recipe.description, url });
+        return;
+      } catch { /* fall through */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied to clipboard');
+    } catch {
+      showToast('Could not share recipe');
+    }
+  };
+
+  const addToCollection = async (collectionId: string) => {
+    try {
+      await addRecipeToCollection(collectionId, recipe.id);
+      showToast('Added to collection');
+      setShowCollections(false);
+    } catch {
+      showToast('Could not add to collection');
+    }
+  };
+
+  const motionProps = reducedMotion
+    ? {}
+    : { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -20 } };
+
   return (
     <SwipeBackWrapper onBack={onBack}>
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-16"
-    >
+    <motion.div {...motionProps} className="recipe-print space-y-16">
       <button 
+        type="button"
         onClick={onBack}
-        className="flex items-center space-x-2 text-sm font-label uppercase tracking-widest hover:text-primary transition-colors"
+        className="flex items-center space-x-2 text-sm font-label uppercase tracking-widest hover:text-primary transition-colors print:hidden"
       >
         <ChevronLeft size={16} />
         <span>Back to Library</span>
@@ -62,7 +103,7 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
               {recipe.description}
             </p>
             {recipe.tags && recipe.tags.length > 0 ? (
-              <ul className="flex flex-wrap gap-2 pt-2">
+              <ul className="flex flex-wrap gap-2 pt-2 print:hidden">
                 {recipe.tags.map((t, i) => (
                   <li
                     key={`${t}-${i}`}
@@ -98,8 +139,20 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
             )}
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center gap-3 print:hidden" role="group" aria-label="Scale servings">
+            <Label>Servings</Label>
+            <button type="button" aria-label="Decrease servings" onClick={() => setServings(s => Math.max(1, s - 1))} className="p-2 rounded-full border border-outline-variant">
+              <Minus size={16} />
+            </button>
+            <span className="font-headline italic text-xl w-8 text-center tabular-nums">{servings}</span>
+            <button type="button" aria-label="Increase servings" onClick={() => setServings(s => Math.min(12, s + 1))} className="p-2 rounded-full border border-outline-variant">
+              <Plus size={16} />
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-4 print:hidden">
             <button 
+              type="button"
               onClick={onStartCooking}
               className="flex-1 bg-primary text-on-primary py-5 rounded-full font-label uppercase tracking-widest text-sm font-bold flex items-center justify-center space-x-3 hover:bg-primary-container transition-all shadow-lg shadow-primary/20"
             >
@@ -115,27 +168,62 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
               <Pencil size={20} />
             </button>
             <button
+              type="button"
               onClick={handleToggleBookmark}
               className={`p-5 rounded-full border transition-colors ${
                 bookmarked
                   ? 'border-primary text-primary'
                   : 'border-outline-variant hover:bg-surface-container'
               }`}
+              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark recipe'}
             >
               <Bookmark size={20} fill={bookmarked ? 'currentColor' : 'none'} />
             </button>
             <button
               type="button"
-              aria-label="Export or share recipe"
-              onClick={() => setExportOpen(true)}
+              aria-label="Share recipe link"
+              onClick={() => void shareRecipe()}
               className="p-5 rounded-full border border-outline-variant hover:bg-surface-container transition-colors"
             >
               <Share2 size={20} />
             </button>
+            <button
+              type="button"
+              aria-label="Export recipe"
+              onClick={() => setExportOpen(true)}
+              className="p-5 rounded-full border border-outline-variant hover:bg-surface-container transition-colors"
+            >
+              <Printer size={20} />
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Add to collection"
+                aria-expanded={showCollections}
+                onClick={() => setShowCollections(v => !v)}
+                className="p-5 rounded-full border border-outline-variant hover:bg-surface-container transition-colors"
+              >
+                <List size={20} />
+              </button>
+              {showCollections && collections.length > 0 && (
+                <div className="absolute right-0 top-full mt-2 min-w-[200px] rounded-xl border border-outline-variant bg-surface shadow-lg z-20 py-1">
+                  {collections.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-surface-container"
+                      onClick={() => void addToCollection(c.id)}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="relative">
+        <div className="relative print:hidden">
           <div className="aspect-[4/5] rounded-2xl overflow-hidden editorial-shadow">
             {recipe.image ? (
               <img 
@@ -169,13 +257,13 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
               <li key={i} className="flex items-center justify-between py-4 border-b border-outline-variant/20 group">
                 <div className="flex items-center space-x-4">
                   {ing.image && (
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container print:hidden">
                       <img src={ing.image} alt={ing.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     </div>
                   )}
                   <span className="text-lg font-light">{ing.name}</span>
                 </div>
-                <span className="font-headline italic text-primary">{ing.amount}</span>
+                <span className="font-headline italic text-primary">{scaleAmount(ing.amount, servings)}</span>
               </li>
             ))}
           </ul>
@@ -186,16 +274,16 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
           <div className="space-y-12">
             {recipe.steps.map((step, i) => (
               <div key={i} className="flex gap-8 group">
-                <div className="flex-shrink-0 w-12 h-12 rounded-full border border-primary flex items-center justify-center text-primary font-headline italic text-xl group-hover:bg-primary group-hover:text-on-primary transition-colors">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full border border-primary flex items-center justify-center text-primary font-headline italic text-xl print:border-on-surface">
                   {i + 1}
                 </div>
                 <div className="space-y-3">
                   <h3 className="text-2xl font-headline italic">{step.title}</h3>
                   {step.photo ? (
-                    <div className="rounded-2xl overflow-hidden border border-outline-variant/30 bg-surface-container-low max-w-xl">
+                    <div className="rounded-2xl overflow-hidden border border-outline-variant/30 bg-surface-container-low max-w-xl print:hidden">
                       <img
                         src={step.photo}
-                        alt=""
+                        alt={`Step ${i + 1} photo`}
                         className="w-full max-h-72 object-cover"
                         referrerPolicy="no-referrer"
                       />
@@ -205,7 +293,7 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
                     {step.description}
                   </p>
                   {step.timer && (
-                    <div className="inline-flex items-center space-x-2 text-xs font-label uppercase tracking-widest text-secondary font-bold bg-secondary/10 px-3 py-1.5 rounded-full">
+                    <div className="inline-flex items-center space-x-2 text-xs font-label uppercase tracking-widest text-secondary font-bold bg-secondary/10 px-3 py-1.5 rounded-full print:hidden">
                       <TimerIcon size={14} />
                       <span>{Math.floor(step.timer / 60)} Minute Timer</span>
                     </div>

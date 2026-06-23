@@ -1,17 +1,16 @@
 import type { Env } from '../lib/env';
 import { generateId, requireUser } from '../lib/auth';
 import { upsertUserRecipe } from '../lib/db';
+import { checkRateLimit } from '../lib/rateLimit';
 import { error, json } from '../lib/response';
-
-function isRecipeShape(v: unknown): v is Record<string, unknown> & { id: string } {
-  if (!v || typeof v !== 'object') return false;
-  const o = v as Record<string, unknown>;
-  return typeof o.title === 'string' && Array.isArray(o.steps) && Array.isArray(o.ingredients);
-}
+import { parseRecipePayload } from '../lib/validation';
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userOrResponse = await requireUser(env, request);
   if (userOrResponse instanceof Response) return userOrResponse;
+
+  const rate = await checkRateLimit(env, `recipes:${userOrResponse.id}`, 30);
+  if (!rate.ok) return error('Too many requests. Try again later.', 429, 'rate_limited');
 
   let body: unknown;
   try {
@@ -20,9 +19,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return error('Invalid request body.');
   }
 
-  if (!isRecipeShape(body)) return error('Invalid recipe data.');
+  const parsed = parseRecipePayload(body);
+  if (!parsed) return error('Invalid recipe data.', 400, 'invalid_recipe');
 
-  const recipe = { ...body, id: `user_${generateId()}`, addedAt: Date.now() };
+  const recipe = { ...parsed, id: `user_${generateId()}`, addedAt: Date.now() };
   await upsertUserRecipe(env, userOrResponse.id, recipe);
   return json({ recipe }, 201);
 };

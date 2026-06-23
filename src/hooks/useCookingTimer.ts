@@ -1,7 +1,29 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 const TIMER_RING_RADIUS = 46;
 const CIRCUMFERENCE = 2 * Math.PI * TIMER_RING_RADIUS;
+
+function playTimerChime() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.8);
+  } catch { /* ignore */ }
+}
+
+function notifyTimerComplete() {
+  if (document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted') {
+    new Notification('Timer complete', { body: 'Your cooking timer has finished.' });
+  }
+  playTimerChime();
+}
 
 export function useCookingTimer(stepIndex: number, onComplete?: () => void) {
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -10,6 +32,12 @@ export function useCookingTimer(stepIndex: number, onComplete?: () => void) {
   const firedRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      void Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => {
     setRemaining(null);
@@ -36,6 +64,7 @@ export function useCookingTimer(stepIndex: number, onComplete?: () => void) {
   useEffect(() => {
     if (remaining === 0 && total > 0 && !firedRef.current) {
       firedRef.current = true;
+      notifyTimerComplete();
       onCompleteRef.current?.();
     }
   }, [remaining, total]);
@@ -43,22 +72,25 @@ export function useCookingTimer(stepIndex: number, onComplete?: () => void) {
   const isComplete = remaining === 0;
   const isStarted = remaining !== null;
 
-  const start = (seconds: number) => {
+  const start = useCallback((seconds: number) => {
     setTotal(seconds);
     setRemaining(seconds);
     setRunning(true);
-  };
+  }, []);
 
-  const pause = () => setRunning(false);
+  const pause = useCallback(() => setRunning(false), []);
 
-  const resume = () => {
-    if (remaining !== null && remaining > 0) setRunning(true);
-  };
+  const resume = useCallback(() => {
+    setRemaining(prev => {
+      if (prev !== null && prev > 0) setRunning(true);
+      return prev;
+    });
+  }, []);
 
   const toggle = (timerSeconds: number) => {
     if (!isStarted) start(timerSeconds);
     else if (running) pause();
-    else if (remaining! > 0) resume();
+    else if (remaining !== null && remaining > 0) resume();
   };
 
   const buttonLabel = !isStarted

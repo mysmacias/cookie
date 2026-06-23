@@ -136,3 +136,53 @@
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only:focus {
+  position: fixed;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+  .dark\:dim body,
+  body {
+    /* optional dim palette when user prefers dark — applied via media query on surface tokens */
+  }
+}
+
+html.dark-dim {
+  --color-surface: #1b1c19;
+  --color-surface-container: #2a2b28;
+  --color-surface-container-low: #242522;
+  --color-surface-container-high: #323330;
+  --color-on-surface: #fbf9f4;
+  --color-on-surface-variant: #c2c8c1;
+  --color-outline-variant: #424843;
+}
+
+@media print {
+  header, footer, .print\:hidden {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .recipe-print {
+    max-width: none;
+    padding: 0;
+  }
+}

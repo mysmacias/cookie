@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useRef, useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UtensilsCrossed, ImagePlus, Trash2 } from 'lucide-react';
+import { X, UtensilsCrossed, ImagePlus, Trash2, Sun, List } from 'lucide-react';
 import { haptic } from '../utils/haptics';
 import { Recipe } from '../types';
 import { isIngredientCrossedOff, isIngredientActiveOnStep } from '../utils/cookingIngredientProgress';
@@ -9,6 +9,8 @@ import { useImagePicker } from '../hooks/useImagePicker';
 import { HiddenFileInputs } from '../components/HiddenFileInputs';
 import { useCookingTimer } from '../hooks/useCookingTimer';
 import { useRecipes } from '../context/RecipeContext';
+import { useWakeLock } from '../hooks/useWakeLock';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface CookingModeScreenProps {
   recipe: Recipe;
@@ -27,6 +29,10 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
   onRecipeSynced,
 }) => {
   const ctx = useRecipes();
+  const [kitchenMode, setKitchenMode] = useState(false);
+  const [showSteps, setShowSteps] = useState(false);
+  const reducedMotion = useReducedMotion();
+  useWakeLock(true);
   const step = recipe.steps[stepIndex];
   const progress = ((stepIndex + 1) / recipe.steps.length) * 100;
 
@@ -56,11 +62,11 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
   const { galleryInputRef, cameraInputRef, handleFileChange, openLibrary, openCamera, supportsCamera } =
     useImagePicker(handlePhotoPicked);
 
-  const handleTimerPress = () => {
+  const handleTimerPress = useCallback(() => {
     if (!step.timer) return;
     if (!timer.isStarted) void haptic('medium');
     timer.toggle(step.timer);
-  };
+  }, [step.timer, timer]);
 
   const ingredientCrossed = useMemo(
     () => recipe.ingredients.map((_, i) => isIngredientCrossedOff(recipe, i, stepIndex)),
@@ -88,13 +94,42 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
     stepScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [stepIndex]);
 
+  const confirmExit = useCallback(() => {
+    if (window.confirm('Exit cooking mode?')) onExit();
+  }, [onExit]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'ArrowRight' && stepIndex < recipe.steps.length - 1) {
+        e.preventDefault();
+        onStepChange(stepIndex + 1);
+      } else if (e.key === 'ArrowLeft' && stepIndex > 0) {
+        e.preventDefault();
+        onStepChange(stepIndex - 1);
+      } else if (e.key === ' ' && step.timer) {
+        e.preventDefault();
+        handleTimerPress();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        confirmExit();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [stepIndex, recipe.steps.length, step.timer, onStepChange, confirmExit, handleTimerPress]);
+
+  const stepMotion = reducedMotion
+    ? {}
+    : { initial: { opacity: 0, x: 20 }, animate: { opacity: 1, x: 0 }, exit: { opacity: 0, x: -20 } };
+
   return (
-    <SwipeBackWrapper onBack={onExit} edgeOnly className="fixed inset-0 z-[60]">
+    <SwipeBackWrapper onBack={confirmExit} edgeOnly className="fixed inset-0 z-[60]">
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="h-full min-h-0 bg-surface flex flex-col"
+      className={`h-full min-h-0 flex flex-col ${kitchenMode ? 'bg-on-surface text-surface' : 'bg-surface'}`}
     >
       <div className="shrink-0 safe-area-top safe-area-x">
         <div className="h-2 bg-surface-container">
@@ -110,18 +145,38 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
           <div className="flex items-start gap-2 sm:gap-4 min-w-0">
             <button
               type="button"
-              onClick={onExit}
+              onClick={confirmExit}
               className="p-2.5 hover:bg-surface-container rounded-full transition-colors shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label="Exit cooking mode"
             >
               <X size={22} />
             </button>
             <div className="min-w-0 pt-0.5">
-              <h2 className="text-lg sm:text-xl font-headline italic leading-tight line-clamp-2">{recipe.title}</h2>
+              <h2 className={`text-lg sm:text-xl font-headline italic leading-tight line-clamp-2 ${kitchenMode ? 'text-surface' : ''}`}>{recipe.title}</h2>
               <p className="text-[10px] font-label uppercase tracking-widest opacity-50 mt-1">
                 Step {stepIndex + 1} of {recipe.steps.length}
               </p>
             </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setKitchenMode(v => !v)}
+              aria-pressed={kitchenMode}
+              aria-label="Toggle kitchen display mode"
+              className="p-2.5 rounded-full border border-outline-variant/40 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            >
+              <Sun size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSteps(v => !v)}
+              aria-expanded={showSteps}
+              aria-label="Show all steps"
+              className="p-2.5 rounded-full border border-outline-variant/40 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            >
+              <List size={20} />
+            </button>
           </div>
         </div>
         </header>
@@ -132,12 +187,27 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain safe-area-x"
       >
         <div className="p-4 sm:p-6 max-w-3xl w-full mx-auto space-y-8 sm:space-y-12 pb-10 sm:pb-12">
+          {showSteps && (
+            <div className="rounded-2xl border border-outline-variant/30 p-4 space-y-2 text-left">
+              <p className="text-[10px] font-label uppercase tracking-widest opacity-50 mb-2">All steps</p>
+              {recipe.steps.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => { onStepChange(i); setShowSteps(false); }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
+                    i === stepIndex ? 'bg-primary/15 font-bold' : 'hover:bg-surface-container'
+                  }`}
+                >
+                  {i + 1}. {s.title}
+                </button>
+              ))}
+            </div>
+          )}
           <AnimatePresence mode="wait">
             <motion.div 
               key={stepIndex}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              {...stepMotion}
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.2}
@@ -152,10 +222,16 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
               }}
               className="space-y-6 sm:space-y-8 text-center"
             >
-              <h3 className="text-3xl sm:text-4xl md:text-6xl font-headline italic leading-tight">
+              <h3 className={`font-headline italic leading-tight ${
+                kitchenMode ? 'text-4xl sm:text-5xl md:text-7xl text-surface' : 'text-3xl sm:text-4xl md:text-6xl'
+              }`}>
                 {step.title}
               </h3>
-              <p className="text-xl sm:text-2xl md:text-3xl text-on-surface-variant leading-relaxed font-light">
+              <p className={`leading-relaxed font-light ${
+                kitchenMode
+                  ? 'text-2xl sm:text-3xl md:text-4xl text-surface/90'
+                  : 'text-xl sm:text-2xl md:text-3xl text-on-surface-variant'
+              }`}>
                 {step.description}
               </p>
 

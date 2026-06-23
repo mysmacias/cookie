@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, SquareCheck, ListX, ArrowUpDown } from 'lucide-react';
+import { Plus, Search, SquareCheck, ListX, ArrowUpDown, Sparkles, LayoutGrid } from 'lucide-react';
 import { SORT_OPTIONS, type LibrarySort } from '../hooks/useLibraryFilters';
 import type { Recipe } from '../types';
 
@@ -18,6 +18,9 @@ interface LibraryToolbarProps {
   onExportList: () => void;
   onExportSelected: () => void;
   onAddRecipe: () => void;
+  onDiscover?: () => void;
+  gridCols: number;
+  setGridCols: (cols: number) => void;
 }
 
 export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
@@ -27,7 +30,8 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
   selectionMode, setSelectionMode,
   selectedCount, exitSelectionMode,
   filteredCount, onExportList, onExportSelected,
-  onAddRecipe,
+  onAddRecipe, onDiscover,
+  gridCols, setGridCols,
 }) => (
   <>
     <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
@@ -137,6 +141,33 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
       >
         <Plus size={18} strokeWidth={2.25} />
       </button>
+      {onDiscover ? (
+        <button
+          type="button"
+          onClick={onDiscover}
+          className="border border-primary/40 text-primary px-4 py-2 rounded-full text-xs font-label uppercase tracking-widest flex items-center gap-2"
+        >
+          <Sparkles size={14} />
+          Discover
+        </button>
+      ) : null}
+      <div className="flex items-center gap-1 border border-outline-variant rounded-full px-2 py-1" role="group" aria-label="Grid columns">
+        <LayoutGrid size={14} className="text-outline ml-1" aria-hidden />
+        {[1, 2, 3, 4].map(n => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`${n} column${n === 1 ? '' : 's'}`}
+            aria-pressed={gridCols === n}
+            onClick={() => setGridCols(n)}
+            className={`h-8 w-8 rounded-full text-xs font-label font-bold ${
+              gridCols === n ? 'bg-primary text-on-primary' : 'hover:bg-surface-container'
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
     </div>
   </>
 );
