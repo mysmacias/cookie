@@ -9,13 +9,10 @@ database_name = "cookie-db"
 database_id = "bfb956b9-aaf1-44d3-ab98-bbcf59ca90b0"
 migrations_dir = "migrations"
 
-[[r2_buckets]]
-binding = "MEDIA_BUCKET"
-bucket_name = "cookie-media"
-
-send_email = [
-  { name = "EMAIL" }
-]
+# Enable R2 in the Cloudflare dashboard, create the bucket, then uncomment:
+# [[r2_buckets]]
+# binding = "MEDIA_BUCKET"
+# bucket_name = "cookie-media"
 
 # Secrets (set per environment, not committed):
 #   npx wrangler pages secret put ANTHROPIC_API_KEY
