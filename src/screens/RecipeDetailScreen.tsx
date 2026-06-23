@@ -12,6 +12,7 @@ import {
   Plus,
   Printer,
   List,
+  ExternalLink,
 } from 'lucide-react';
 import { Recipe } from '../types';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
@@ -102,6 +103,17 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({ recipe, 
             <p className="text-xl text-on-surface-variant leading-relaxed font-light italic">
               {recipe.description}
             </p>
+            {recipe.sourceUrl ? (
+              <a
+                href={recipe.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-secondary hover:text-primary transition-colors print:hidden"
+              >
+                <ExternalLink size={14} />
+                <span>View original recipe</span>
+              </a>
+            ) : null}
             {recipe.tags && recipe.tags.length > 0 ? (
               <ul className="flex flex-wrap gap-2 pt-2 print:hidden">
                 {recipe.tags.map((t, i) => (

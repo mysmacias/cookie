@@ -23,7 +23,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     return error('Invalid recipe data.', 400, 'invalid_recipe');
   }
 
-  if (recipeId.startsWith('user_') || recipeId.startsWith('api_')) {
+  if (recipeId.startsWith('user_') || recipeId.startsWith('api_') || recipeId.startsWith('scrape_')) {
     const existing = await env.DB.prepare(
       'SELECT data FROM user_recipes WHERE user_id = ? AND id = ?',
     ).bind(userOrResponse.id, recipeId).first<{ data: string }>();

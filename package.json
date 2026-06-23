@@ -15,6 +15,7 @@
     "pages:dev": "wrangler pages dev dist",
     "seed:recipes:mediterranean": "node scripts/fetch-recipe-api-recipes.mjs --limit=12",
     "seed:recipes:themealdb:mediterranean": "node scripts/fetch-themealdb-recipes.mjs --limit=24",
+    "scrape:recipes": "node scripts/scrape-recipes.mjs",
     "deploy": "npm run build && wrangler pages deploy dist"
   },
   "dependencies": {
