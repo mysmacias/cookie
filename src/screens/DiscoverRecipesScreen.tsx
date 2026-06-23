@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, Download, Globe, Loader2, Search, Sparkles } from 'lucide-react';
 import type { Recipe } from '../types';
 import { Screen } from '../hooks/useNavigation';
+import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { useRecipes } from '../context/RecipeContext';
 import {
   getImportedApiExternalIds,
@@ -189,6 +190,7 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
   };
 
   return (
+    <SwipeBackWrapper onBack={() => navigateTo('library')}>
     <motion.div
       key="discover"
       initial={{ opacity: 0 }}
@@ -316,6 +318,7 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
         />
       )}
     </motion.div>
+    </SwipeBackWrapper>
   );
 };
 

@@ -5,9 +5,20 @@ import {
   isValidEmail,
   isValidPassword,
   sessionCookie,
+  deleteSession,
 } from '../../lib/auth';
 import { checkRateLimit, clientIp } from '../../lib/rateLimit';
 import { error, json } from '../../lib/response';
+
+function getSessionToken(request: Request): string | null {
+  const cookie = request.headers.get('Cookie');
+  if (!cookie) return null;
+  for (const part of cookie.split(';')) {
+    const [name, ...rest] = part.trim().split('=');
+    if (name === 'cookie_session') return rest.join('=') || null;
+  }
+  return null;
+}
 
 interface LoginBody {
   email?: string;
@@ -49,6 +60,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const hash = await hashPassword(password, user.salt);
   if (hash !== user.password_hash) return error('Invalid email or password.', 401);
+
+  const existingToken = getSessionToken(request);
+  if (existingToken) await deleteSession(env, existingToken);
 
   const session = await createSession(env, user.id);
 

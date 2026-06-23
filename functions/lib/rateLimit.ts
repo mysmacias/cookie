@@ -1,12 +1,24 @@
 import type { Env } from './env';
 
 const WINDOW_MS = 60_000;
+const PRUNE_AGE_MS = 5 * 60_000;
+let lastPruneAt = 0;
+
+export async function pruneRateLimits(env: Env): Promise<void> {
+  const now = Date.now();
+  if (now - lastPruneAt < PRUNE_AGE_MS) return;
+  lastPruneAt = now;
+  await env.DB.prepare(
+    'DELETE FROM rate_limits WHERE ? - window_start > ?',
+  ).bind(now, WINDOW_MS * 2).run();
+}
 
 export async function checkRateLimit(
   env: Env,
   key: string,
   max: number,
 ): Promise<{ ok: true } | { ok: false; retryAfterSec: number }> {
+  await pruneRateLimits(env);
   const now = Date.now();
   const row = await env.DB.prepare(
     'SELECT count, window_start FROM rate_limits WHERE key = ?',

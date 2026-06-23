@@ -74,7 +74,7 @@ export async function saveRecipe(recipe: Recipe): Promise<Recipe> {
     body: JSON.stringify(prepared),
   });
 
-  if (recipe.id.startsWith('user_') || recipe.id.startsWith('api_')) {
+  if (recipe.id.startsWith('user_') || recipe.id.startsWith('api_') || recipe.id.startsWith('scrape_')) {
     const i = userRecipes.findIndex(r => r.id === recipe.id);
     if (i !== -1) userRecipes[i] = data.recipe;
     else userRecipes.push(data.recipe);
@@ -82,6 +82,22 @@ export async function saveRecipe(recipe: Recipe): Promise<Recipe> {
     overrides[recipe.id] = data.recipe;
   }
 
+  return data.recipe;
+}
+
+export async function deleteRecipe(recipeId: string): Promise<void> {
+  await apiFetch(`/api/recipes/${encodeURIComponent(recipeId)}`, { method: 'DELETE' });
+  userRecipes = userRecipes.filter(r => r.id !== recipeId);
+  delete overrides[recipeId];
+  bookmarks = bookmarks.filter(id => id !== recipeId);
+}
+
+export async function duplicateRecipe(recipeId: string): Promise<Recipe> {
+  const data = await apiFetch<{ recipe: Recipe }>('/api/recipes', {
+    method: 'POST',
+    body: JSON.stringify({ copyFrom: recipeId }),
+  });
+  userRecipes.push(data.recipe);
   return data.recipe;
 }
 

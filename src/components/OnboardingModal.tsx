@@ -42,13 +42,14 @@ export const OnboardingModal: React.FC<{ open: boolean; onClose: () => void }> =
           </button>
         </div>
         <p className="text-on-surface-variant leading-relaxed">
-          Your editorial recipe companion. Browse the library, bookmark favorites, cook step-by-step with timers,
-          and export recipes as beautiful PDF cookbooks.
+          Your editorial recipe companion. Browse and import recipes, map similarities, plan synchronized meals,
+          shop from your library, and export beautiful cookbooks.
         </p>
         <ol className="space-y-3 text-sm text-on-surface-variant list-decimal list-inside">
-          <li>Search and filter recipes in the library</li>
-          <li>Tap a recipe to view details and start cooking mode</li>
-          <li>Export selections or collections as PDF / Markdown</li>
+          <li>Search, filter, and discover new recipes in your library</li>
+          <li>Use Graph to find related dishes by ingredients, tags, and origin</li>
+          <li>Cook one recipe step-by-step or use Cook Plan to coordinate several dishes</li>
+          <li>Build collections, shopping lists, and PDF / Markdown cookbooks</li>
         </ol>
         <button
           type="button"

@@ -7,6 +7,15 @@ import {AuthProvider} from './context/AuthContext';
 import {RecipeProvider} from './context/RecipeContext';
 import {ErrorBoundary} from './components/ErrorBoundary';
 
+if (typeof window !== 'undefined') {
+  try {
+    const stored = localStorage.getItem('cookie_theme');
+    const pref = stored === 'dark' || stored === 'light' || stored === 'system' ? stored : 'system';
+    const dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark-dim', dark);
+  } catch { /* ignore */ }
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

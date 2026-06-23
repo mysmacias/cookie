@@ -1,5 +1,6 @@
 import type { Env } from '../../lib/env';
 import { requireUser, generateId } from '../../lib/auth';
+import { checkRateLimit } from '../../lib/rateLimit';
 import { error, json } from '../../lib/response';
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -8,6 +9,9 @@ const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userOrResponse = await requireUser(env, request);
   if (userOrResponse instanceof Response) return userOrResponse;
+
+  const rate = await checkRateLimit(env, `media:${userOrResponse.id}`, 20);
+  if (!rate.ok) return error('Too many uploads. Try again later.', 429, 'rate_limited');
 
   if (!env.MEDIA_BUCKET) {
     return error('Media storage is not configured.', 503, 'media_not_configured');

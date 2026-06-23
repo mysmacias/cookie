@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { useNavigation, Screen } from './hooks/useNavigation';
+import { useNavigation, Screen, isResetPasswordRoute } from './hooks/useNavigation';
 import { useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -15,6 +15,14 @@ import { ExportsScreen } from './screens/ExportsScreen';
 import { DiscoverRecipesScreen } from './screens/DiscoverRecipesScreen';
 import { ShoppingListScreen } from './screens/ShoppingListScreen';
 import { CollectionsScreen } from './screens/CollectionsScreen';
+import { CollectionDetailScreen } from './screens/CollectionDetailScreen';
+import { RecipeGraphScreen } from './screens/RecipeGraphScreen';
+import { CookPlanScreen } from './screens/CookPlanScreen';
+import { CookPlanModeScreen } from './screens/CookPlanModeScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { MealPlanScreen } from './screens/MealPlanScreen';
+import { ShareRecipeScreen } from './screens/ShareRecipeScreen';
+import { ResetPasswordScreen } from './screens/ResetPasswordScreen';
 import { AuthScreen } from './screens/AuthScreen';
 import { OnboardingModal, useOnboarding } from './components/OnboardingModal';
 import { RecipeCardSkeleton } from './components/RecipeCardSkeleton';
@@ -26,10 +34,21 @@ export default function App() {
   const {
     currentScreen,
     routeRecipeId,
+    graphFocusId,
+    collectionId,
+    shareToken,
+    cookPlanRecipeIds,
+    activeCookPlan,
+    cookPlanTaskIndex,
+    setCookPlanTaskIndex,
     selectedRecipe,
     currentStepIndex,
     setCurrentStepIndex,
     navigateTo: navTo,
+    navigateToCollection,
+    navigateToCookPlan,
+    startCookPlanMode,
+    exitCookPlanMode,
     startCooking,
     setSelectedRecipe,
     editingRecipe,
@@ -49,11 +68,16 @@ export default function App() {
     }
   }, [routeRecipeId, ctx.recipes, setSelectedRecipe, setEditingRecipe]);
 
-  const navigateTo = useCallback((screen: Screen, recipe?: Recipe) => {
+  const navigateTo = useCallback((
+    screen: Screen,
+    recipe?: Recipe,
+    cookPlanIds?: string[],
+    options?: { collectionId?: string; shareToken?: string },
+  ) => {
     if (screen === 'add' && recipe === undefined) {
       setEditingRecipe(null);
     }
-    navTo(screen, recipe);
+    navTo(screen, recipe, cookPlanIds, options);
     setIsMenuOpen(false);
   }, [navTo, setEditingRecipe]);
 
@@ -86,14 +110,39 @@ export default function App() {
     });
   }, [setSelectedRecipe, ctx.recipes]);
 
+  if (isResetPasswordRoute()) {
+    return (
+      <ResetPasswordScreen
+        onDone={() => {
+          window.history.replaceState(null, '', '/');
+          window.location.reload();
+        }}
+      />
+    );
+  }
+
+  if (currentScreen === 'share' && shareToken && !auth.isAuthenticated) {
+    return (
+      <ShareRecipeScreen
+        token={shareToken}
+        onSignIn={() => {
+          window.history.replaceState(null, '', '/');
+          window.location.reload();
+        }}
+      />
+    );
+  }
+
   if (auth.isLoading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center px-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 w-full max-w-4xl">
-          <RecipeCardSkeleton />
-          <RecipeCardSkeleton />
-          <RecipeCardSkeleton />
-        </div>
+      <div className="min-h-screen bg-surface flex items-center justify-center px-6" aria-busy="true">
+        <main id="main" tabIndex={-1} className="outline-none w-full max-w-4xl">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+            <RecipeCardSkeleton />
+            <RecipeCardSkeleton />
+            <RecipeCardSkeleton />
+          </div>
+        </main>
       </div>
     );
   }
@@ -124,10 +173,14 @@ export default function App() {
         setIsMenuOpen={setIsMenuOpen}
       />
 
-      <main id="main" className="max-w-7xl mx-auto px-6 py-12">
+      <main id="main" tabIndex={-1} className="max-w-7xl mx-auto px-6 py-12 outline-none">
         <AnimatePresence mode="wait">
           {currentScreen === 'library' && (
-            <LibraryScreen navigateTo={navigateTo} startCooking={startCooking} />
+            <LibraryScreen
+              navigateTo={navigateTo}
+              startCooking={startCooking}
+              onCookTogether={ids => navigateToCookPlan(ids)}
+            />
           )}
 
           {currentScreen === 'discover' && (
@@ -140,6 +193,8 @@ export default function App() {
               onBack={() => navigateTo('library')}
               onStartCooking={() => startCooking(recipeResolved)}
               onEditRecipe={() => openEditRecipe(recipeResolved)}
+              onFindSimilar={() => navigateTo('graph', recipeResolved)}
+              navigateTo={navigateTo}
             />
           )}
 
@@ -163,6 +218,7 @@ export default function App() {
               onStepChange={setCurrentStepIndex}
               onExit={() => navigateTo('detail', recipeResolved)}
               onRecipeSynced={handleCookingRecipeSynced}
+              navigateTo={navigateTo}
             />
           )}
 
@@ -176,7 +232,68 @@ export default function App() {
 
           {currentScreen === 'shopping' && <ShoppingListScreen navigateTo={navigateTo} />}
 
-          {currentScreen === 'collections' && <CollectionsScreen navigateTo={navigateTo} />}
+          {currentScreen === 'collections' && (
+            <CollectionsScreen navigateTo={navigateTo} onOpenCollection={navigateToCollection} />
+          )}
+
+          {currentScreen === 'collection-detail' && collectionId && (
+            <CollectionDetailScreen
+              collectionId={collectionId}
+              navigateTo={navigateTo}
+              startCooking={startCooking}
+              onCookTogether={ids => navigateToCookPlan(ids)}
+            />
+          )}
+
+          {currentScreen === 'settings' && <SettingsScreen navigateTo={navigateTo} />}
+
+          {currentScreen === 'meal-plan' && <MealPlanScreen navigateTo={navigateTo} />}
+
+          {currentScreen === 'share' && shareToken && (
+            <ShareRecipeScreen
+              token={shareToken}
+              onSignIn={() => navigateTo('library')}
+            />
+          )}
+
+          {currentScreen === 'graph' && (
+            <RecipeGraphScreen
+              navigateTo={navigateTo}
+              startCooking={startCooking}
+              focusRecipeId={graphFocusId}
+              onCookTogether={ids => navigateToCookPlan(ids)}
+            />
+          )}
+
+          {currentScreen === 'cook-plan' && (
+            <CookPlanScreen
+              navigateTo={navigateTo}
+              initialRecipeIds={cookPlanRecipeIds}
+              onStartCookPlan={startCookPlanMode}
+            />
+          )}
+
+          {currentScreen === 'cook-plan-mode' && activeCookPlan && (
+            <CookPlanModeScreen
+              plan={activeCookPlan}
+              taskIndex={cookPlanTaskIndex}
+              onTaskChange={setCookPlanTaskIndex}
+              onExit={exitCookPlanMode}
+            />
+          )}
+
+          {currentScreen === 'cook-plan-mode' && !activeCookPlan && (
+            <div className="text-center py-20 text-on-surface-variant">
+              <p className="font-headline italic text-2xl mb-4">No active cook plan</p>
+              <button
+                type="button"
+                onClick={() => navigateToCookPlan(cookPlanRecipeIds)}
+                className="text-sm font-label uppercase tracking-widest text-primary"
+              >
+                Build a plan
+              </button>
+            </div>
+          )}
 
           {currentScreen === 'add' && (
             <AddRecipeScreen

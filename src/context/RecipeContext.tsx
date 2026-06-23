@@ -4,6 +4,8 @@ import { useAuth, fetchUserData } from './AuthContext';
 import {
   createRecipe,
   saveRecipe,
+  deleteRecipe as deleteRecipeApi,
+  duplicateRecipe as duplicateRecipeApi,
   toggleBookmarkApi,
   clearUserDataCache,
 } from '../services/recipeApi';
@@ -19,6 +21,8 @@ interface RecipeContextValue {
   isLoading: boolean;
   addRecipe: (recipe: Omit<Recipe, 'id'>) => Promise<Recipe>;
   updateRecipe: (recipe: Recipe) => Promise<void>;
+  deleteRecipe: (id: string) => Promise<void>;
+  duplicateRecipe: (id: string) => Promise<Recipe>;
   toggleBookmark: (id: string) => Promise<boolean>;
   isBookmarked: (id: string) => boolean;
   refreshRecipes: () => Promise<void>;
@@ -77,6 +81,17 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     syncFromCache();
   }, [syncFromCache]);
 
+  const deleteRecipe = useCallback(async (id: string) => {
+    await deleteRecipeApi(id);
+    syncFromCache();
+  }, [syncFromCache]);
+
+  const duplicateRecipe = useCallback(async (id: string) => {
+    const created = await duplicateRecipeApi(id);
+    syncFromCache();
+    return created;
+  }, [syncFromCache]);
+
   const toggleBookmark = useCallback(async (id: string) => {
     const newState = await toggleBookmarkApi(id);
     setBookmarkedIds(storeBookmarkedIds());
@@ -93,11 +108,13 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isLoading,
     addRecipe,
     updateRecipe,
+    deleteRecipe,
+    duplicateRecipe,
     toggleBookmark,
     isBookmarked,
     refreshRecipes: refresh,
     version,
-  }), [recipes, bookmarkedIds, isLoading, addRecipe, updateRecipe, toggleBookmark, isBookmarked, refresh, version]);
+  }), [recipes, bookmarkedIds, isLoading, addRecipe, updateRecipe, deleteRecipe, duplicateRecipe, toggleBookmark, isBookmarked, refresh, version]);
 
   return (
     <RecipeContext.Provider value={value}>

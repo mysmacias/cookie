@@ -8,7 +8,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface HeaderProps {
   currentScreen: Screen;
-  navigateTo: (screen: Screen) => void;
+  navigateTo: (screen: Screen, recipe?: import('../types').Recipe) => void;
   isMenuOpen: boolean;
   setIsMenuOpen: (open: boolean) => void;
 }
@@ -68,14 +68,22 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
           <nav aria-label="Main" className="hidden md:flex items-center space-x-10 text-sm font-label uppercase tracking-widest">
             <NavButton label="The Library" screen="library" currentScreen={currentScreen} navigateTo={navigateTo} />
             <NavButton label="Discover" screen="discover" currentScreen={currentScreen} navigateTo={navigateTo} />
+            <NavButton label="Graph" screen="graph" currentScreen={currentScreen} navigateTo={navigateTo} />
+            <NavButton label="Cook plan" screen="cook-plan" currentScreen={currentScreen} navigateTo={navigateTo} />
             <NavButton label="Shopping" screen="shopping" currentScreen={currentScreen} navigateTo={navigateTo} />
+            <NavButton label="Meal plan" screen="meal-plan" currentScreen={currentScreen} navigateTo={navigateTo} />
             <NavButton label="Collections" screen="collections" currentScreen={currentScreen} navigateTo={navigateTo} />
             <NavButton label="My books" screen="exports" currentScreen={currentScreen} navigateTo={navigateTo} />
             <NavButton label="About" screen="about" currentScreen={currentScreen} navigateTo={navigateTo} />
             {auth.user && (
-              <span className="text-on-surface-variant normal-case tracking-normal font-body text-xs max-w-[140px] truncate" title={auth.user.email}>
+              <button
+                type="button"
+                onClick={() => navigateTo('settings')}
+                className="text-on-surface-variant normal-case tracking-normal font-body text-xs max-w-[140px] truncate hover:text-primary transition-colors"
+                title={`${auth.user.name || auth.user.email} — Settings`}
+              >
                 {auth.user.name || auth.user.email}
-              </span>
+              </button>
             )}
             <button type="button" onClick={() => navigateTo('add')} className="flex items-center space-x-2 bg-primary text-on-primary px-5 py-2.5 rounded-full hover:bg-primary-container transition-colors">
               <Plus size={16} />
@@ -120,15 +128,24 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
             <nav aria-label="Main" className="flex flex-col space-y-8 text-2xl font-headline italic">
               <NavButton label="The Library" screen="library" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="Discover" screen="discover" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
+              <NavButton label="Graph" screen="graph" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
+              <NavButton label="Cook plan" screen="cook-plan" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="Shopping list" screen="shopping" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
+              <NavButton label="Meal plan" screen="meal-plan" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="Collections" screen="collections" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
+              <NavButton label="Settings" screen="settings" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
+              <NavButton label="Privacy" screen="privacy" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="My books" screen="exports" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="About" screen="about" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="Add Recipe" screen="add" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               {auth.user && (
-                <p className="text-base not-italic font-body text-on-surface-variant pt-4 border-t border-outline-variant/30">
+                <button
+                  type="button"
+                  onClick={() => { navigateTo('settings'); closeMenu(); }}
+                  className="text-base not-italic font-body text-on-surface-variant pt-4 border-t border-outline-variant/30 text-left hover:text-primary w-full"
+                >
                   Signed in as {auth.user.name || auth.user.email}
-                </p>
+                </button>
               )}
               <button
                 type="button"

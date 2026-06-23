@@ -66,16 +66,16 @@ export const RecipeFormSteps: React.FC<RecipeFormStepsProps> = ({
 
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label as="label">Step Title</Label>
-        <Input placeholder="e.g. Preheat and Prep" value={stepTitle} onChange={e => setStepTitle(e.target.value)} />
+        <Label as="label" htmlFor="step-title">Step Title</Label>
+        <Input id="step-title" placeholder="e.g. Preheat and Prep" value={stepTitle} onChange={e => setStepTitle(e.target.value)} />
       </div>
       <div className="space-y-2">
-        <Label as="label">Description</Label>
-        <Textarea className="h-24" placeholder="Describe what to do in this step..." value={stepDesc} onChange={e => setStepDesc(e.target.value)} />
+        <Label as="label" htmlFor="step-description">Description</Label>
+        <Textarea id="step-description" className="h-24" placeholder="Describe what to do in this step..." value={stepDesc} onChange={e => setStepDesc(e.target.value)} />
       </div>
       <div className="space-y-2">
-        <Label as="label">Timer (minutes, optional)</Label>
-        <Input type="number" placeholder="e.g. 10" value={stepTimer} onChange={e => setStepTimer(e.target.value)} min="0" />
+        <Label as="label" htmlFor="step-timer">Timer (minutes, optional)</Label>
+        <Input id="step-timer" type="number" placeholder="e.g. 10" value={stepTimer} onChange={e => setStepTimer(e.target.value)} min="0" />
       </div>
       {ingredients.length > 0 ? (
         <div className="space-y-2">

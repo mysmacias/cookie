@@ -53,15 +53,16 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
         if (selectionMode) onSelectToggle?.();
         else onClick();
       }}
-      onKeyDown={selectionMode ? (e) => {
-        if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          onSelectToggle?.();
-        }
-      } : undefined}
-      tabIndex={selectionMode ? 0 : undefined}
-      role={selectionMode ? 'checkbox' : undefined}
+      onKeyDown={(e) => {
+        if (e.key !== ' ' && e.key !== 'Enter') return;
+        e.preventDefault();
+        if (selectionMode) onSelectToggle?.();
+        else onClick();
+      }}
+      tabIndex={0}
+      role={selectionMode ? 'checkbox' : 'link'}
       aria-checked={selectionMode ? selected : undefined}
+      aria-label={selectionMode ? undefined : `Open ${recipe.title}`}
     >
       <div className="aspect-[4/5] overflow-hidden rounded-xl bg-surface-container relative">
         {recipe.image ? (
@@ -168,7 +169,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
               e.stopPropagation();
               onCookTonight();
             }}
-            className="absolute bottom-4 right-4 z-10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-primary text-on-primary px-3 py-1.5 rounded-full text-[9px] font-label uppercase tracking-widest font-bold shadow-md"
+            className="absolute bottom-4 right-4 z-10 opacity-0 group-hover:opacity-100 group-focus:opacity-100 group-focus-within:opacity-100 transition-opacity bg-primary text-on-primary px-3 py-1.5 rounded-full text-[9px] font-label uppercase tracking-widest font-bold shadow-md"
           >
             Cook tonight
           </button>

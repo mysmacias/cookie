@@ -1,8 +1,13 @@
 import React, { useMemo, useRef, useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UtensilsCrossed, ImagePlus, Trash2, Sun, List } from 'lucide-react';
+import { X, UtensilsCrossed, ImagePlus, Trash2, Sun, List, ShoppingCart } from 'lucide-react';
 import { haptic } from '../utils/haptics';
 import { Recipe } from '../types';
+import { Screen } from '../hooks/useNavigation';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { saveRecipeNotes } from '../services/recipeNotesApi';
+import { fetchShoppingList, saveShoppingList } from '../services/shoppingListApi';
+import { buildShoppingItemsFromRecipes, mergeShoppingItems } from '../utils/shoppingList';
 import { isIngredientCrossedOff, isIngredientActiveOnStep } from '../utils/cookingIngredientProgress';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { useImagePicker } from '../hooks/useImagePicker';
@@ -11,6 +16,7 @@ import { useCookingTimer } from '../hooks/useCookingTimer';
 import { useRecipes } from '../context/RecipeContext';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useToast } from '../components/ui/Toast';
 
 interface CookingModeScreenProps {
   recipe: Recipe;
@@ -19,6 +25,7 @@ interface CookingModeScreenProps {
   onExit: () => void;
   /** Call after mutating recipe in store so parent state stays fresh */
   onRecipeSynced?: () => void;
+  navigateTo?: (screen: Screen, recipe?: Recipe) => void;
 }
 
 export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
@@ -29,8 +36,10 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
   onRecipeSynced,
 }) => {
   const ctx = useRecipes();
+  const { showToast } = useToast();
   const [kitchenMode, setKitchenMode] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const reducedMotion = useReducedMotion();
   useWakeLock(true);
   const step = recipe.steps[stepIndex];
@@ -95,8 +104,27 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
   }, [stepIndex]);
 
   const confirmExit = useCallback(() => {
-    if (window.confirm('Exit cooking mode?')) onExit();
-  }, [onExit]);
+    setConfirmExitOpen(true);
+  }, []);
+
+  const finishCooking = useCallback(async () => {
+    void haptic('success');
+    try {
+      await saveRecipeNotes(recipe.id, { lastCookedAt: Date.now() });
+    } catch { /* non-blocking */ }
+    onExit();
+  }, [recipe.id, onExit]);
+
+  const addToShoppingList = useCallback(async () => {
+    try {
+      const incoming = buildShoppingItemsFromRecipes([recipe]);
+      const existing = await fetchShoppingList();
+      await saveShoppingList(mergeShoppingItems(existing, incoming));
+      showToast('Ingredients added to shopping list');
+    } catch {
+      showToast('Could not update shopping list');
+    }
+  }, [recipe, showToast]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -342,7 +370,7 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
               
               {step.timer && (
                 <div className="flex flex-col items-center space-y-4">
-                  <div className="relative flex h-32 w-32 items-center justify-center">
+                  <div className="relative flex h-32 w-32 items-center justify-center" aria-live="polite" aria-atomic="true">
                     <svg
                       className="absolute inset-0 h-full w-full -rotate-90"
                       viewBox="0 0 100 100"
@@ -375,6 +403,10 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
                       {timer.display ?? timer.formatTime(step.timer)}
                     </div>
                   </div>
+                  <div className="sr-only" aria-live="polite" aria-atomic="true">
+                    {timer.isStarted && timer.display ? `Timer: ${timer.display}` : ''}
+                    {timer.isComplete ? 'Timer complete' : ''}
+                  </div>
                   <button
                     type="button"
                     onClick={handleTimerPress}
@@ -406,6 +438,14 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
             ))}
           </div>
           <div className="flex items-stretch justify-between gap-2 sm:gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => void addToShoppingList()}
+              aria-label="Add ingredients to shopping list"
+              className="p-3.5 rounded-full border border-outline-variant shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            >
+              <ShoppingCart size={18} />
+            </button>
             <button 
               type="button"
               disabled={stepIndex === 0}
@@ -417,7 +457,7 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
             {stepIndex === recipe.steps.length - 1 ? (
               <button 
                 type="button"
-                onClick={() => { void haptic('success'); onExit(); }}
+                onClick={() => void finishCooking()}
                 className="px-4 sm:px-8 py-3.5 rounded-full bg-secondary text-on-primary font-label uppercase tracking-widest text-[10px] sm:text-xs font-bold shrink-0 min-h-[44px]"
               >
                 Finish Cooking
@@ -434,6 +474,14 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
           </div>
         </div>
       </footer>
+      <ConfirmDialog
+        open={confirmExitOpen}
+        title="Exit cooking mode?"
+        message="Your progress on this session will not be saved."
+        confirmLabel="Exit"
+        onConfirm={() => { setConfirmExitOpen(false); onExit(); }}
+        onCancel={() => setConfirmExitOpen(false)}
+      />
     </motion.div>
     </SwipeBackWrapper>
   );

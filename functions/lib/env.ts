@@ -1,6 +1,9 @@
 export interface Env {
   DB: D1Database;
+  EMAIL?: SendEmail;
   MEDIA_BUCKET?: R2Bucket;
+  EMAIL_FROM?: string;
+  APP_URL?: string;
   RECIPE_API_KEY?: string;
   BRAVE_SEARCH_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;

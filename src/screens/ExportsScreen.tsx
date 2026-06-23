@@ -12,6 +12,7 @@ import {
 } from '../services/exportLibrary';
 import { Screen } from '../hooks/useNavigation';
 import { useToast } from '../components/ui/Toast';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface ExportsScreenProps {
   navigateTo: (screen: Screen) => void;
@@ -45,6 +46,9 @@ export const ExportsScreen: React.FC<ExportsScreenProps> = ({ navigateTo }) => {
     if (viewer?.mode === 'pdf') URL.revokeObjectURL(viewer.url);
     setViewer(null);
   };
+
+  const deleteTrapRef = useFocusTrap(!!pendingDelete, () => setPendingDelete(null));
+  const viewerTrapRef = useFocusTrap(!!viewer, closeViewer);
 
   const openItem = async (item: ExportDocItem) => {
     try {
@@ -171,6 +175,7 @@ export const ExportsScreen: React.FC<ExportsScreenProps> = ({ navigateTo }) => {
             onClick={() => setPendingDelete(null)}
           >
             <motion.div
+              ref={deleteTrapRef}
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 40, opacity: 0 }}
@@ -208,10 +213,14 @@ export const ExportsScreen: React.FC<ExportsScreenProps> = ({ navigateTo }) => {
       <AnimatePresence>
         {viewer ? (
           <motion.div
+            ref={viewerTrapRef}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[300] flex flex-col bg-surface"
+            role="dialog"
+            aria-modal="true"
+            aria-label={viewer.title}
           >
             <div className="shrink-0 flex items-center justify-between gap-4 px-4 py-4 border-b border-outline-variant/30 safe-area-top">
               <p className="font-headline italic text-lg truncate flex-1 min-w-0">{viewer.title}</p>

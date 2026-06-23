@@ -66,12 +66,12 @@ export const RecipeFormIngredients: React.FC<RecipeFormIngredientsProps> = ({
       <div className="space-y-4">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex-1 min-w-[140px] space-y-2">
-            <Label as="label">Ingredient Name</Label>
-            <Input placeholder="e.g. All-purpose Flour" value={ingName} onChange={e => setIngName(e.target.value)} />
+            <Label as="label" htmlFor="ingredient-name">Ingredient Name</Label>
+            <Input id="ingredient-name" placeholder="e.g. All-purpose Flour" value={ingName} onChange={e => setIngName(e.target.value)} />
           </div>
           <div className="flex-1 min-w-[140px] space-y-2">
-            <Label as="label">Amount</Label>
-            <Input placeholder="e.g. 2 cups" value={ingAmount} onChange={e => setIngAmount(e.target.value)} />
+            <Label as="label" htmlFor="ingredient-amount">Amount</Label>
+            <Input id="ingredient-amount" placeholder="e.g. 2 cups" value={ingAmount} onChange={e => setIngAmount(e.target.value)} />
           </div>
           <button
             type="button"
