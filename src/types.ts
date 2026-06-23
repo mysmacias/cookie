@@ -31,4 +31,6 @@ export interface Recipe {
   steps: Step[];
   chefNote?: string;
   isHeirloom?: boolean;
+  /** Unix ms when the recipe was first added to the library */
+  addedAt?: number;
 }

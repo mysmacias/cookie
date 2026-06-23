@@ -1,7 +1,7 @@
 import type { Env } from '../lib/env';
 import { generateId, requireUser } from '../lib/auth';
 import { upsertUserRecipe } from '../lib/db';
-import { checkRateLimit, clientIp } from '../lib/rateLimit';
+import { checkRateLimit } from '../lib/rateLimit';
 import { error, json } from '../lib/response';
 import { parseRecipePayload } from '../lib/validation';
 
@@ -22,7 +22,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const parsed = parseRecipePayload(body);
   if (!parsed) return error('Invalid recipe data.', 400, 'invalid_recipe');
 
-  const recipe = { ...parsed, id: `user_${generateId()}` };
+  const recipe = { ...parsed, id: `user_${generateId()}`, addedAt: Date.now() };
   await upsertUserRecipe(env, userOrResponse.id, recipe);
   return json({ recipe }, 201);
 };
