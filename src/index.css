@@ -169,11 +169,14 @@
 
 html.dark-dim {
   --color-surface: #1b1c19;
+  --color-surface-container-lowest: #131410;
   --color-surface-container: #2a2b28;
   --color-surface-container-low: #242522;
   --color-surface-container-high: #323330;
+  --color-surface-container-highest: #3d3e3a;
   --color-on-surface: #fbf9f4;
   --color-on-surface-variant: #c2c8c1;
+  --color-outline: #8c938b;
   --color-outline-variant: #424843;
   --color-error: #ffb4ab;
   --color-error-container: #93000a;

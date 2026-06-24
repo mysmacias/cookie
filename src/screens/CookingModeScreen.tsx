@@ -422,7 +422,11 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
         </div>
       </div>
 
-      <footer className="px-4 pt-3 pb-6 sm:p-6 border-t border-outline-variant/30 bg-surface-container-lowest safe-area-bottom safe-area-x">
+      <footer className={`px-4 pt-3 pb-6 sm:p-6 border-t safe-area-bottom safe-area-x ${
+        kitchenMode
+          ? 'border-surface/15 bg-on-surface text-surface'
+          : 'border-outline-variant/30 bg-surface-container-lowest'
+      }`}>
         <div className="flex flex-col gap-3 w-full max-w-3xl mx-auto">
           <div
             className="flex flex-wrap justify-center gap-1.5 order-first sm:order-none py-1"

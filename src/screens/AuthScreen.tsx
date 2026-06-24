@@ -237,6 +237,23 @@ export const AuthScreen: React.FC = () => {
               {submitting ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
             </Button>
           </form>
+
+          <div className="mt-6 pt-6 border-t border-outline-variant/30 text-center">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={async () => {
+                auth.continueAsGuest();
+                await recipes.refreshRecipes();
+              }}
+              className="text-xs font-label uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors disabled:opacity-40"
+            >
+              Continue as guest
+            </button>
+            <p className="mt-2 text-xs text-on-surface-variant/70 font-body">
+              Try COOKIE without an account. Your recipes stay on this device until you sign up.
+            </p>
+          </div>
         </div>
       </motion.div>
     </div>

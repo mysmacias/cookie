@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Play, ExternalLink, Network, ChefHat } from 'lucide-react';
+import { ChevronLeft, Play, ExternalLink, Network, ChefHat, Clock } from 'lucide-react';
 import { Screen } from '../hooks/useNavigation';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { useRecipes } from '../context/RecipeContext';
@@ -9,8 +9,12 @@ import {
   buildRecipeGraph,
   computeSimilarity,
   getRecipeCategories,
+  getRecipeRegion,
+  getRegionLegend,
   getSimilarRecipes,
+  parseRecipeTimeMinutes,
   type GraphEdge,
+  type RegionInfo,
   type SimilarityBreakdown,
 } from '../utils/recipeSimilarity';
 
@@ -27,9 +31,51 @@ interface NodePosition {
   y: number;
 }
 
-const SVG_SIZE = 520;
-const NODE_RADIUS = 28;
+const SVG_SIZE = 640;
+const MIN_NODE_RADIUS = 16;
+const MAX_NODE_RADIUS = 42;
 const DEFAULT_THRESHOLD = 0.25;
+
+/** Region color helpers: derive fill/stroke from a region's hue. */
+function regionFill(region: RegionInfo, emphasis = false): string {
+  return `hsl(${region.hue} 70% ${emphasis ? 58 : 50}%)`;
+}
+function regionStroke(region: RegionInfo): string {
+  return `hsl(${region.hue} 75% 38%)`;
+}
+
+/**
+ * Map each recipe to a node radius scaled by total cook time. Recipes without a
+ * parseable time fall back to the smallest radius.
+ */
+function buildRadiusMap(recipes: { id: string; minutes: number | null }[]): Map<string, number> {
+  const times = recipes.map(r => r.minutes).filter((m): m is number => m != null && m > 0);
+  const map = new Map<string, number>();
+  if (times.length === 0) {
+    recipes.forEach(r => map.set(r.id, (MIN_NODE_RADIUS + MAX_NODE_RADIUS) / 2));
+    return map;
+  }
+  const min = Math.min(...times);
+  const max = Math.max(...times);
+  // Square-root scale so area reads proportionally without huge outliers.
+  const scale = (m: number) => {
+    if (max === min) return (MIN_NODE_RADIUS + MAX_NODE_RADIUS) / 2;
+    const t = (Math.sqrt(m) - Math.sqrt(min)) / (Math.sqrt(max) - Math.sqrt(min));
+    return MIN_NODE_RADIUS + t * (MAX_NODE_RADIUS - MIN_NODE_RADIUS);
+  };
+  recipes.forEach(r => {
+    map.set(r.id, r.minutes != null && r.minutes > 0 ? scale(r.minutes) : MIN_NODE_RADIUS);
+  });
+  return map;
+}
+
+function formatMinutes(minutes: number | null): string {
+  if (minutes == null) return 'Time unknown';
+  if (minutes < 60) return `${minutes} min`;
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins === 0 ? `${hrs} hr` : `${hrs} hr ${mins} min`;
+}
 
 function parseFocusFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search);
@@ -41,7 +87,8 @@ function runForceLayout(
   nodeIds: string[],
   edges: GraphEdge[],
   focusId: string | null,
-  iterations = 80,
+  radiusOf: (id: string) => number,
+  iterations = 90,
 ): Map<string, NodePosition> {
   const positions = new Map<string, NodePosition>();
   const center = SVG_SIZE / 2;
@@ -65,8 +112,12 @@ function runForceLayout(
         const b = positions.get(nodeIds[j])!;
         let dx = b.x - a.x;
         let dy = b.y - a.y;
+        // Keep nodes apart relative to their combined radii so big (slow-cook)
+        // circles don't overlap their neighbors.
+        const minGap = radiusOf(nodeIds[i]) + radiusOf(nodeIds[j]) + 18;
         const dist = Math.max(Math.hypot(dx, dy), 1);
-        const repulse = 4200 / (dist * dist);
+        const overlap = dist < minGap ? (minGap - dist) * 2.2 : 0;
+        const repulse = 5200 / (dist * dist) + overlap / dist;
         dx = (dx / dist) * repulse;
         dy = (dy / dist) * repulse;
         if (nodeIds[i] !== focusId) {
@@ -109,7 +160,7 @@ function runForceLayout(
       }
       p.x += (center - p.x) * 0.02;
       p.y += (center - p.y) * 0.02;
-      const margin = NODE_RADIUS + 8;
+      const margin = radiusOf(id) + 14;
       p.x = Math.min(SVG_SIZE - margin, Math.max(margin, p.x));
       p.y = Math.min(SVG_SIZE - margin, Math.max(margin, p.y));
       p.x *= damping;
@@ -147,9 +198,35 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
 
   const activeFocusId = focusId && graph.nodes.some(n => n.id === focusId) ? focusId : null;
 
+  const nodeTimes = useMemo(
+    () =>
+      graph.nodes.map(n => ({
+        id: n.id,
+        minutes: parseRecipeTimeMinutes(n.recipe.time),
+      })),
+    [graph.nodes],
+  );
+
+  const radiusMap = useMemo(() => buildRadiusMap(nodeTimes), [nodeTimes]);
+  const radiusOf = useCallback(
+    (id: string) => radiusMap.get(id) ?? MIN_NODE_RADIUS,
+    [radiusMap],
+  );
+
+  const minutesById = useMemo(() => {
+    const m = new Map<string, number | null>();
+    nodeTimes.forEach(n => m.set(n.id, n.minutes));
+    return m;
+  }, [nodeTimes]);
+
+  const regionLegend = useMemo(
+    () => getRegionLegend(graph.nodes.map(n => n.recipe)),
+    [graph.nodes],
+  );
+
   const positions = useMemo(
-    () => runForceLayout(graph.nodes.map(n => n.id), graph.edges, activeFocusId),
-    [graph.nodes, graph.edges, activeFocusId],
+    () => runForceLayout(graph.nodes.map(n => n.id), graph.edges, activeFocusId, radiusOf),
+    [graph.nodes, graph.edges, activeFocusId, radiusOf],
   );
 
   const selectedRecipe = useMemo(
@@ -245,6 +322,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
           <h1 className="text-5xl md:text-7xl font-headline italic leading-none">Recipe graph</h1>
           <p className="text-on-surface-variant max-w-2xl">
             Explore how your recipes relate through shared ingredients, tags, and cuisine.
+            Bigger circles take longer to cook; colors group recipes by region of origin.
             {focusRecipe ? (
               <> Focused on <span className="text-primary font-headline italic">{focusRecipe.title}</span>.</>
             ) : null}
@@ -325,6 +403,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                       selectedId === edge.target ||
                       activeFocusId === edge.source ||
                       activeFocusId === edge.target;
+                    const anyActive = Boolean(selectedId || activeFocusId);
                     return (
                       <line
                         key={`${edge.source}-${edge.target}`}
@@ -333,8 +412,13 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                         x2={b.x}
                         y2={b.y}
                         stroke="currentColor"
-                        strokeWidth={highlighted ? 2.5 : 1}
-                        className={highlighted ? 'text-primary/60' : 'text-outline-variant/50'}
+                        strokeWidth={highlighted ? 3 + edge.weight * 2 : 1.5}
+                        strokeLinecap="round"
+                        className={highlighted ? 'text-primary' : 'text-outline-variant'}
+                        style={{
+                          opacity: highlighted ? 0.8 : anyActive ? 0.12 : 0.4,
+                          transition: 'opacity 0.2s',
+                        }}
                       />
                     );
                   })}
@@ -343,8 +427,14 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                     if (!pos) return null;
                     const isSelected = selectedId === node.id;
                     const isFocus = activeFocusId === node.id;
-                    const label = node.recipe.title.length > 14
-                      ? `${node.recipe.title.slice(0, 12)}…`
+                    const isActive = isSelected || isFocus;
+                    const region = getRecipeRegion(node.recipe);
+                    const r = radiusOf(node.id);
+                    const minutes = minutesById.get(node.id) ?? null;
+                    // Dim nodes that aren't selected/focused while something is active.
+                    const dim = (selectedId || activeFocusId) && !isActive;
+                    const label = node.recipe.title.length > 16
+                      ? `${node.recipe.title.slice(0, 14)}…`
                       : node.recipe.title;
                     return (
                       <g
@@ -352,27 +442,40 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                         transform={`translate(${pos.x}, ${pos.y})`}
                         role="button"
                         tabIndex={0}
-                        aria-label={`${node.recipe.title}, ${node.recipe.category}`}
+                        aria-label={`${node.recipe.title}, ${region.label}, ${formatMinutes(minutes)}`}
                         aria-pressed={isSelected}
                         className="cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        style={{ opacity: dim ? 0.35 : 1, transition: 'opacity 0.2s' }}
                         onClick={() => handleSelectNode(node.id)}
                         onKeyDown={e => handleKeyNode(e, node.id)}
                       >
+                        {isActive && (
+                          <circle
+                            r={r + 7}
+                            fill="none"
+                            stroke={regionFill(region, true)}
+                            strokeWidth={2}
+                            opacity={0.5}
+                          />
+                        )}
                         <circle
-                          r={NODE_RADIUS}
-                          className={
-                            isFocus
-                              ? 'fill-secondary stroke-secondary'
-                              : isSelected
-                                ? 'fill-primary stroke-primary'
-                                : 'fill-surface-container-high stroke-outline-variant'
-                          }
-                          strokeWidth={isSelected || isFocus ? 3 : 1.5}
+                          r={r}
+                          fill={regionFill(region, isActive)}
+                          stroke={isActive ? regionFill(region, true) : regionStroke(region)}
+                          strokeWidth={isActive ? 4 : 2}
                         />
                         <text
-                          y={NODE_RADIUS + 14}
+                          y={4}
                           textAnchor="middle"
-                          className="fill-on-surface text-[9px] font-label uppercase tracking-wide pointer-events-none"
+                          className="fill-white font-label font-bold pointer-events-none"
+                          style={{ fontSize: Math.max(8, Math.min(11, r / 3)) }}
+                        >
+                          {formatMinutes(minutes).replace(' min', 'm').replace(' hr', 'h')}
+                        </text>
+                        <text
+                          y={r + 15}
+                          textAnchor="middle"
+                          className="fill-on-surface text-[10px] font-label font-bold tracking-wide pointer-events-none"
                         >
                           {label}
                         </text>
@@ -380,6 +483,35 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                     );
                   })}
                 </svg>
+
+                <div className="border-t border-outline-variant/30 px-5 py-4 space-y-3 bg-surface-container-low/30">
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                    <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                      Region of origin
+                    </span>
+                    {regionLegend.map(region => (
+                      <span key={region.key} className="flex items-center gap-2">
+                        <span
+                          className="inline-block w-3 h-3 rounded-full shrink-0"
+                          style={{
+                            backgroundColor: regionFill(region),
+                            border: `1.5px solid ${regionStroke(region)}`,
+                          }}
+                        />
+                        <span className="text-xs text-on-surface">{region.label}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                    <span>Circle size</span>
+                    <span className="flex items-center gap-2 normal-case tracking-normal text-xs text-on-surface">
+                      <span className="inline-block w-3 h-3 rounded-full bg-on-surface-variant/40" />
+                      quick
+                      <span className="inline-block w-5 h-5 rounded-full bg-on-surface-variant/40" />
+                      slow to cook
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -441,7 +573,25 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                     {selectedRecipe.category}
                   </p>
                   <h2 className="text-3xl font-headline italic leading-tight">{selectedRecipe.title}</h2>
-                  <p className="text-sm text-on-surface-variant line-clamp-3">{selectedRecipe.description}</p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {(() => {
+                      const region = getRecipeRegion(selectedRecipe);
+                      return (
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-label uppercase tracking-widest text-white"
+                          style={{ backgroundColor: regionFill(region) }}
+                        >
+                          <span className="inline-block w-2 h-2 rounded-full bg-white/80" />
+                          {region.label}
+                        </span>
+                      );
+                    })()}
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-outline-variant/50 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                      <Clock size={11} />
+                      {formatMinutes(parseRecipeTimeMinutes(selectedRecipe.time))}
+                    </span>
+                  </div>
+                  <p className="text-sm text-on-surface-variant line-clamp-3 pt-1">{selectedRecipe.description}</p>
                 </div>
 
                 {selectedBreakdown && (

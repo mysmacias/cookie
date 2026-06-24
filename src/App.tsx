@@ -147,7 +147,7 @@ export default function App() {
     );
   }
 
-  if (!auth.isAuthenticated) {
+  if (!auth.isAuthenticated && !auth.isGuest) {
     return <AuthScreen />;
   }
 
@@ -172,6 +172,23 @@ export default function App() {
         isMenuOpen={isMenuOpen}
         setIsMenuOpen={setIsMenuOpen}
       />
+
+      {auth.isGuest && (
+        <div className="bg-primary/5 border-b border-outline-variant/20">
+          <div className="max-w-7xl mx-auto px-6 py-2.5 flex items-center justify-center gap-3 text-center">
+            <p className="text-xs sm:text-sm text-on-surface-variant font-body">
+              You're browsing as a guest — recipes are saved on this device only.
+            </p>
+            <button
+              type="button"
+              onClick={() => auth.exitGuest()}
+              className="text-xs font-label uppercase tracking-widest text-primary hover:underline whitespace-nowrap"
+            >
+              Sign up to sync
+            </button>
+          </div>
+        </div>
+      )}
 
       <main id="main" tabIndex={-1} className="max-w-7xl mx-auto px-6 py-12 outline-none">
         <AnimatePresence mode="wait">
