@@ -28,6 +28,116 @@ const CUISINE_KEYWORDS = new Set([
   'cajun',
 ]);
 
+/**
+ * Maps individual cuisine tags to a broader region of origin. Each region has a
+ * stable key, a human label, and a distinct hue used to color graph nodes.
+ */
+export interface RegionInfo {
+  key: string;
+  label: string;
+  /** HSL hue (0–360) used to derive node fill/stroke colors. */
+  hue: number;
+}
+
+const REGIONS: Record<string, RegionInfo> = {
+  mediterranean: { key: 'mediterranean', label: 'Mediterranean', hue: 28 },
+  'middle-eastern': { key: 'middle-eastern', label: 'Middle East & N. Africa', hue: 45 },
+  'east-asian': { key: 'east-asian', label: 'East & SE Asia', hue: 0 },
+  'south-asian': { key: 'south-asian', label: 'South Asian', hue: 16 },
+  european: { key: 'european', label: 'European', hue: 210 },
+  americas: { key: 'americas', label: 'Americas', hue: 145 },
+  african: { key: 'african', label: 'African', hue: 95 },
+  unknown: { key: 'unknown', label: 'Unspecified', hue: 220 },
+};
+
+/** Cuisine keyword → region key. Keep in sync with CUISINE_KEYWORDS. */
+const CUISINE_TO_REGION: Record<string, string> = {
+  mediterranean: 'mediterranean',
+  italian: 'mediterranean',
+  greek: 'mediterranean',
+  spanish: 'mediterranean',
+  french: 'european',
+  moroccan: 'middle-eastern',
+  turkish: 'middle-eastern',
+  lebanese: 'middle-eastern',
+  'middle eastern': 'middle-eastern',
+  asian: 'east-asian',
+  chinese: 'east-asian',
+  japanese: 'east-asian',
+  korean: 'east-asian',
+  thai: 'east-asian',
+  indian: 'south-asian',
+  mexican: 'americas',
+  american: 'americas',
+  british: 'european',
+  german: 'european',
+  african: 'african',
+  caribbean: 'americas',
+  latin: 'americas',
+  southern: 'americas',
+  cajun: 'americas',
+};
+
+/** Determine the region of origin for a recipe from its cuisine tags. */
+export function getRecipeRegion(recipe: Recipe): RegionInfo {
+  for (const tag of cuisineSet(recipe)) {
+    const regionKey = CUISINE_TO_REGION[tag];
+    if (regionKey && REGIONS[regionKey]) return REGIONS[regionKey];
+  }
+  return REGIONS.unknown;
+}
+
+/** All regions present across the given recipes, for building a legend. */
+export function getRegionLegend(recipes: Recipe[]): RegionInfo[] {
+  const present = new Map<string, RegionInfo>();
+  for (const recipe of recipes) {
+    const region = getRecipeRegion(recipe);
+    present.set(region.key, region);
+  }
+  // Stable order: known regions first (by REGIONS order), unknown last.
+  const order = Object.keys(REGIONS);
+  return [...present.values()].sort(
+    (a, b) => order.indexOf(a.key) - order.indexOf(b.key),
+  );
+}
+
+/**
+ * Parse a free-form recipe time string ("1 hr 15 mins", "30m", "2 days",
+ * "14+ hrs") into total minutes. Returns null when nothing parseable is found.
+ */
+export function parseRecipeTimeMinutes(time: string | undefined): number | null {
+  if (!time) return null;
+  const text = time.toLowerCase();
+  let minutes = 0;
+  let matched = false;
+
+  const dayMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:days?|d)\b/);
+  if (dayMatch) {
+    minutes += parseFloat(dayMatch[1]) * 24 * 60;
+    matched = true;
+  }
+  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:hrs?|hours?|h)\b/);
+  if (hourMatch) {
+    minutes += parseFloat(hourMatch[1]) * 60;
+    matched = true;
+  }
+  const minMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:mins?|minutes?|m)\b/);
+  if (minMatch) {
+    minutes += parseFloat(minMatch[1]);
+    matched = true;
+  }
+
+  if (!matched) {
+    const bare = text.match(/(\d+(?:\.\d+)?)/);
+    if (bare) {
+      minutes = parseFloat(bare[1]);
+      matched = true;
+    }
+  }
+
+  return matched ? Math.round(minutes) : null;
+}
+
 const SCORE_WEIGHTS = {
   ingredients: 0.45,
   tags: 0.3,

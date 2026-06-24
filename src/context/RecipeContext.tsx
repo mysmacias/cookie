@@ -8,6 +8,7 @@ import {
   duplicateRecipe as duplicateRecipeApi,
   toggleBookmarkApi,
   clearUserDataCache,
+  loadGuestData,
 } from '../services/recipeApi';
 import {
   getAllRecipes as storeGetAll,
@@ -38,7 +39,7 @@ export function useRecipes(): RecipeContextValue {
 }
 
 export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isGuest } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,6 +52,11 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const refresh = useCallback(async () => {
+    if (isGuest) {
+      loadGuestData();
+      syncFromCache();
+      return;
+    }
     if (!isAuthenticated) {
       clearUserDataCache();
       setRecipes([]);
@@ -64,7 +70,7 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, syncFromCache]);
+  }, [isAuthenticated, isGuest, syncFromCache]);
 
   useEffect(() => {
     void refresh();
@@ -87,7 +93,8 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [syncFromCache]);
 
   const duplicateRecipe = useCallback(async (id: string) => {
-    const created = await duplicateRecipeApi(id);
+    const source = storeGetAll().find(r => r.id === id);
+    const created = await duplicateRecipeApi(id, source);
     syncFromCache();
     return created;
   }, [syncFromCache]);

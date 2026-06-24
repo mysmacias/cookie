@@ -78,7 +78,6 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
         }
         cookTogetherCount={lib.selectedCount}
         onAddRecipe={() => navigateTo('add')}
-        onDiscover={() => navigateTo('discover')}
         gridCols={lib.gridCols}
         setGridCols={lib.setGridCols}
       />

@@ -52,6 +52,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigateTo }) =>
         </section>
       )}
 
+      {auth.isGuest && (
+        <section className="rounded-2xl border border-outline-variant/30 p-6 space-y-3">
+          <p className="font-headline italic text-2xl">Guest</p>
+          <p className="text-on-surface-variant text-sm">
+            Your recipes are saved on this device only. Create an account to sync them everywhere — your current recipes will come with you.
+          </p>
+          <button
+            type="button"
+            onClick={() => auth.exitGuest()}
+            className="text-sm font-label uppercase tracking-widest text-primary hover:underline"
+          >
+            Sign up to sync
+          </button>
+        </section>
+      )}
+
       <section className="space-y-4">
         <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Appearance</h2>
         <div className="flex flex-wrap gap-2">
@@ -85,6 +101,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigateTo }) =>
         </button>
       </section>
 
+      {auth.user && (
       <section className="rounded-2xl border border-error/30 bg-error-container/20 p-6 space-y-4">
         <h2 className="text-sm font-label uppercase tracking-widest text-secondary">Danger zone</h2>
         <p className="text-sm text-on-surface-variant">
@@ -100,6 +117,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigateTo }) =>
           Delete account
         </button>
       </section>
+      )}
 
       <ConfirmDialog
         open={confirmDelete}

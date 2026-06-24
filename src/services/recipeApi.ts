@@ -17,6 +17,25 @@ let userRecipes: Recipe[] = [];
 let overrides: Record<string, Recipe> = {};
 let bookmarks: string[] = [];
 
+// Guest mode keeps everything in localStorage (the same keys we later import
+// into a real account) instead of hitting the authenticated API.
+let guestMode = false;
+
+export function setGuestMode(enabled: boolean): void {
+  guestMode = enabled;
+}
+
+export function isGuestMode(): boolean {
+  return guestMode;
+}
+
+function genId(prefix: string): string {
+  const rand = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}${rand}`;
+}
+
 function isRecipeShape(v: unknown): v is Recipe {
   if (!v || typeof v !== 'object') return false;
   const o = v as Record<string, unknown>;
@@ -59,6 +78,12 @@ export async function fetchUserData(): Promise<UserDataPayload> {
 
 export async function createRecipe(recipe: Omit<Recipe, 'id'>): Promise<Recipe> {
   const prepared = await prepareRecipeMedia(recipe as Recipe);
+  if (guestMode) {
+    const created: Recipe = { ...(prepared as Recipe), id: genId('user_'), addedAt: Date.now() };
+    userRecipes.push(created);
+    persistGuestData();
+    return created;
+  }
   const data = await apiFetch<{ recipe: Recipe }>('/api/recipes', {
     method: 'POST',
     body: JSON.stringify(prepared),
@@ -67,32 +92,60 @@ export async function createRecipe(recipe: Omit<Recipe, 'id'>): Promise<Recipe> 
   return data.recipe;
 }
 
+function applySavedRecipe(saved: Recipe): void {
+  if (saved.id.startsWith('user_') || saved.id.startsWith('api_') || saved.id.startsWith('scrape_')) {
+    const i = userRecipes.findIndex(r => r.id === saved.id);
+    if (i !== -1) userRecipes[i] = saved;
+    else userRecipes.push(saved);
+  } else {
+    overrides[saved.id] = saved;
+  }
+}
+
 export async function saveRecipe(recipe: Recipe): Promise<Recipe> {
   const prepared = await prepareRecipeMedia(recipe);
+  if (guestMode) {
+    applySavedRecipe(prepared);
+    persistGuestData();
+    return prepared;
+  }
   const data = await apiFetch<{ recipe: Recipe }>(`/api/recipes/${encodeURIComponent(recipe.id)}`, {
     method: 'PUT',
     body: JSON.stringify(prepared),
   });
 
-  if (recipe.id.startsWith('user_') || recipe.id.startsWith('api_') || recipe.id.startsWith('scrape_')) {
-    const i = userRecipes.findIndex(r => r.id === recipe.id);
-    if (i !== -1) userRecipes[i] = data.recipe;
-    else userRecipes.push(data.recipe);
-  } else {
-    overrides[recipe.id] = data.recipe;
-  }
-
+  applySavedRecipe(data.recipe);
   return data.recipe;
 }
 
 export async function deleteRecipe(recipeId: string): Promise<void> {
+  if (guestMode) {
+    userRecipes = userRecipes.filter(r => r.id !== recipeId);
+    delete overrides[recipeId];
+    bookmarks = bookmarks.filter(id => id !== recipeId);
+    persistGuestData();
+    return;
+  }
   await apiFetch(`/api/recipes/${encodeURIComponent(recipeId)}`, { method: 'DELETE' });
   userRecipes = userRecipes.filter(r => r.id !== recipeId);
   delete overrides[recipeId];
   bookmarks = bookmarks.filter(id => id !== recipeId);
 }
 
-export async function duplicateRecipe(recipeId: string): Promise<Recipe> {
+export async function duplicateRecipe(recipeId: string, source?: Recipe): Promise<Recipe> {
+  if (guestMode) {
+    if (!source) throw new Error('Recipe to copy not found.');
+    const { id: _id, ...rest } = source;
+    const copy: Recipe = {
+      ...(rest as Omit<Recipe, 'id'>),
+      id: genId('user_'),
+      title: `${source.title} (copy)`,
+      addedAt: Date.now(),
+    } as Recipe;
+    userRecipes.push(copy);
+    persistGuestData();
+    return copy;
+  }
   const data = await apiFetch<{ recipe: Recipe }>('/api/recipes', {
     method: 'POST',
     body: JSON.stringify({ copyFrom: recipeId }),
@@ -102,6 +155,14 @@ export async function duplicateRecipe(recipeId: string): Promise<Recipe> {
 }
 
 export async function toggleBookmarkApi(recipeId: string): Promise<boolean> {
+  if (guestMode) {
+    const index = bookmarks.indexOf(recipeId);
+    const bookmarked = index === -1;
+    if (bookmarked) bookmarks.push(recipeId);
+    else bookmarks.splice(index, 1);
+    persistGuestData();
+    return bookmarked;
+  }
   const data = await apiFetch<{ bookmarked: boolean }>('/api/bookmarks/toggle', {
     method: 'POST',
     body: JSON.stringify({ recipeId }),
@@ -125,6 +186,29 @@ function readLocalJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function persistGuestData(): void {
+  try {
+    localStorage.setItem(USER_RECIPES_KEY, JSON.stringify(userRecipes));
+    localStorage.setItem(OVERRIDES_KEY, JSON.stringify(overrides));
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks));
+  } catch {
+    // Ignore quota / serialization errors; the in-memory cache still works.
+  }
+}
+
+// Hydrate the in-memory cache from localStorage for guest sessions. Clears the
+// "imported" flag so guest data is still picked up if the guest signs up later.
+export function loadGuestData(): void {
+  localStorage.removeItem(IMPORTED_KEY);
+  userRecipes = readLocalJson<unknown[]>(USER_RECIPES_KEY, []).filter(isRecipeShape);
+  overrides = {};
+  const overridesRaw = readLocalJson<Record<string, unknown>>(OVERRIDES_KEY, {});
+  for (const [k, v] of Object.entries(overridesRaw)) {
+    if (isRecipeShape(v)) overrides[k] = v;
+  }
+  bookmarks = readLocalJson<string[]>(BOOKMARKS_KEY, []).filter(id => typeof id === 'string');
 }
 
 export function hasLocalDataToImport(): boolean {

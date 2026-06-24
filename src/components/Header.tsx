@@ -67,7 +67,6 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
 
           <nav aria-label="Main" className="hidden md:flex items-center space-x-10 text-sm font-label uppercase tracking-widest">
             <NavButton label="The Library" screen="library" currentScreen={currentScreen} navigateTo={navigateTo} />
-            <NavButton label="Discover" screen="discover" currentScreen={currentScreen} navigateTo={navigateTo} />
             <NavButton label="Graph" screen="graph" currentScreen={currentScreen} navigateTo={navigateTo} />
             <NavButton label="Cook plan" screen="cook-plan" currentScreen={currentScreen} navigateTo={navigateTo} />
             <NavButton label="Shopping" screen="shopping" currentScreen={currentScreen} navigateTo={navigateTo} />
@@ -85,15 +84,25 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
                 {auth.user.name || auth.user.email}
               </button>
             )}
+            {auth.isGuest && (
+              <button
+                type="button"
+                onClick={() => navigateTo('settings')}
+                className="text-on-surface-variant normal-case tracking-normal font-body text-xs hover:text-primary transition-colors"
+                title="Guest — Settings"
+              >
+                Guest
+              </button>
+            )}
             <button type="button" onClick={() => navigateTo('add')} className="flex items-center space-x-2 bg-primary text-on-primary px-5 py-2.5 rounded-full hover:bg-primary-container transition-colors">
               <Plus size={16} />
               <span>Add Recipe</span>
             </button>
             <button
               type="button"
-              onClick={() => void auth.logout()}
+              onClick={() => (auth.isGuest ? auth.exitGuest() : void auth.logout())}
               className="flex items-center space-x-2 hover:text-secondary transition-colors"
-              aria-label="Sign out"
+              aria-label={auth.isGuest ? 'Exit guest' : 'Sign out'}
             >
               <LogOut size={16} />
             </button>
@@ -127,7 +136,6 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
           >
             <nav aria-label="Main" className="flex flex-col space-y-8 text-2xl font-headline italic">
               <NavButton label="The Library" screen="library" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
-              <NavButton label="Discover" screen="discover" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="Graph" screen="graph" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="Cook plan" screen="cook-plan" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
               <NavButton label="Shopping list" screen="shopping" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
@@ -147,13 +155,22 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
                   Signed in as {auth.user.name || auth.user.email}
                 </button>
               )}
+              {auth.isGuest && (
+                <button
+                  type="button"
+                  onClick={() => { navigateTo('settings'); closeMenu(); }}
+                  className="text-base not-italic font-body text-on-surface-variant pt-4 border-t border-outline-variant/30 text-left hover:text-primary w-full"
+                >
+                  Browsing as guest
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => void auth.logout()}
+                onClick={() => { if (auth.isGuest) { auth.exitGuest(); } else { void auth.logout(); } closeMenu(); }}
                 className="text-left text-secondary hover:opacity-80 flex items-center gap-3"
               >
                 <LogOut size={22} />
-                Sign out
+                {auth.isGuest ? 'Exit guest' : 'Sign out'}
               </button>
             </nav>
           </motion.div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, SquareCheck, ListX, ArrowUpDown, Sparkles, LayoutGrid, ChefHat } from 'lucide-react';
+import { Plus, Search, SquareCheck, ListX, ArrowUpDown, LayoutGrid, ChefHat } from 'lucide-react';
 import { SORT_OPTIONS, type LibrarySort } from '../hooks/useLibraryFilters';
 import type { Recipe } from '../types';
 
@@ -20,7 +20,6 @@ interface LibraryToolbarProps {
   onCookTogether?: () => void;
   cookTogetherCount?: number;
   onAddRecipe: () => void;
-  onDiscover?: () => void;
   gridCols: number;
   setGridCols: (cols: number) => void;
 }
@@ -33,7 +32,7 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
   selectedCount, exitSelectionMode,
   filteredCount, onExportList, onExportSelected,
   onCookTogether, cookTogetherCount = 0,
-  onAddRecipe, onDiscover,
+  onAddRecipe,
   gridCols, setGridCols,
 }) => (
   <>
@@ -159,16 +158,6 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
       >
         <Plus size={18} strokeWidth={2.25} />
       </button>
-      {onDiscover ? (
-        <button
-          type="button"
-          onClick={onDiscover}
-          className="border border-primary/40 text-primary px-4 py-2 rounded-full text-xs font-label uppercase tracking-widest flex items-center gap-2"
-        >
-          <Sparkles size={14} />
-          Discover
-        </button>
-      ) : null}
       <div className="flex items-center gap-1 border border-outline-variant rounded-full px-2 py-1" role="group" aria-label="Grid columns">
         <LayoutGrid size={14} className="text-outline ml-1" aria-hidden />
         {[1, 2, 3, 4].map(n => (
