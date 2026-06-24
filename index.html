@@ -12,8 +12,22 @@
     <meta name="description" content="A curated recipe app for the modern home cook." />
     <title>COOKIE</title>
   </head>
-  <body style="background-color: #fbf9f4">
+  <body>
     <div id="root"></div>
+    <script>
+      // Apply the saved theme before paint to avoid a flash and to keep the
+      // body background in sync with light/dark mode.
+      (function () {
+        try {
+          var pref = localStorage.getItem('cookie_theme') || 'system';
+          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark-dim', dark);
+          document.body.style.backgroundColor = dark ? '#1b1c19' : '#fbf9f4';
+        } catch (e) {
+          document.body.style.backgroundColor = '#fbf9f4';
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
