@@ -36,9 +36,6 @@ export function useAuth(): AuthContextValue {
 }
 
 async function bootstrapSession(): Promise<AuthUser | null> {
-  if (import.meta.env.DEV && new URLSearchParams(location.search).has('devauth')) {
-    return { id: 'dev', email: 'dev@test.com', name: 'Dev' };
-  }
   const user = await authService.fetchCurrentUser();
   if (!user) return null;
 

@@ -88,23 +88,35 @@ function runForceLayout(
   edges: GraphEdge[],
   focusId: string | null,
   radiusOf: (id: string) => number,
-  iterations = 90,
+  iterations = 220,
 ): Map<string, NodePosition> {
   const positions = new Map<string, NodePosition>();
   const center = SVG_SIZE / 2;
-  const radius = SVG_SIZE * 0.34;
+  const n = Math.max(nodeIds.length, 1);
+
+  // Spread the initial ring wider for bigger graphs so nodes don't start piled
+  // on top of each other (which the solver struggles to untangle).
+  const spread = Math.min(SVG_SIZE * 0.46, SVG_SIZE * (0.22 + n * 0.006));
 
   nodeIds.forEach((id, i) => {
-    const angle = (2 * Math.PI * i) / Math.max(nodeIds.length, 1);
+    // Golden-angle spiral seeds nodes evenly across the disk, not just a ring.
+    const t = (i + 0.5) / n;
+    const angle = i * 2.399963229728653;
+    const rad = spread * Math.sqrt(t);
     positions.set(id, {
       id,
-      x: focusId === id ? center : center + radius * Math.cos(angle),
-      y: focusId === id ? center : center + radius * Math.sin(angle),
+      x: focusId === id ? center : center + rad * Math.cos(angle),
+      y: focusId === id ? center : center + rad * Math.sin(angle),
     });
   });
 
+  // Scale repulsion with node count so dense graphs push apart enough to read.
+  const repulseK = 6000 + n * 120;
+  // Gravity weakens as the graph grows, letting it use the whole canvas.
+  const gravity = Math.max(0.006, 0.02 - n * 0.0002);
+
   for (let iter = 0; iter < iterations; iter++) {
-    const damping = 0.85 - iter / iterations * 0.35;
+    const cooling = 1 - iter / iterations;
 
     for (let i = 0; i < nodeIds.length; i++) {
       for (let j = i + 1; j < nodeIds.length; j++) {
@@ -113,11 +125,11 @@ function runForceLayout(
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         // Keep nodes apart relative to their combined radii so big (slow-cook)
-        // circles don't overlap their neighbors.
-        const minGap = radiusOf(nodeIds[i]) + radiusOf(nodeIds[j]) + 18;
-        const dist = Math.max(Math.hypot(dx, dy), 1);
-        const overlap = dist < minGap ? (minGap - dist) * 2.2 : 0;
-        const repulse = 5200 / (dist * dist) + overlap / dist;
+        // circles never overlap their neighbors.
+        const minGap = radiusOf(nodeIds[i]) + radiusOf(nodeIds[j]) + 22;
+        const dist = Math.max(Math.hypot(dx, dy), 0.5);
+        const overlap = dist < minGap ? (minGap - dist) * 0.5 : 0;
+        const repulse = repulseK / (dist * dist) + overlap;
         dx = (dx / dist) * repulse;
         dy = (dy / dist) * repulse;
         if (nodeIds[i] !== focusId) {
@@ -138,7 +150,8 @@ function runForceLayout(
       let dx = b.x - a.x;
       let dy = b.y - a.y;
       const dist = Math.max(Math.hypot(dx, dy), 1);
-      const attract = (dist - 110) * 0.04 * edge.weight;
+      const ideal = radiusOf(edge.source) + radiusOf(edge.target) + 70;
+      const attract = (dist - ideal) * 0.05 * edge.weight;
       dx = (dx / dist) * attract;
       dy = (dy / dist) * attract;
       if (edge.source !== focusId) {
@@ -158,15 +171,13 @@ function runForceLayout(
         p.y = center;
         continue;
       }
-      p.x += (center - p.x) * 0.02;
-      p.y += (center - p.y) * 0.02;
+      // Gentle pull toward center keeps the graph from drifting off-canvas
+      // without crushing it into a ball.
+      p.x += (center - p.x) * gravity * cooling;
+      p.y += (center - p.y) * gravity * cooling;
       const margin = radiusOf(id) + 14;
       p.x = Math.min(SVG_SIZE - margin, Math.max(margin, p.x));
       p.y = Math.min(SVG_SIZE - margin, Math.max(margin, p.y));
-      p.x *= damping;
-      p.y *= damping;
-      p.x += center * (1 - damping);
-      p.y += center * (1 - damping);
     }
   }
 
@@ -188,6 +199,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(focusProp ?? parseFocusFromUrl());
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   const categories = useMemo(() => getRecipeCategories(ctx.recipes), [ctx.recipes]);
 
@@ -392,7 +404,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
               >
                 <svg
                   viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
-                  className="w-full h-auto max-h-[min(70vh,520px)]"
+                  className="w-full h-auto max-h-[min(80vh,680px)]"
                 >
                   {graph.edges.map(edge => {
                     const a = positions.get(edge.source);
@@ -428,13 +440,17 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                     const isSelected = selectedId === node.id;
                     const isFocus = activeFocusId === node.id;
                     const isActive = isSelected || isFocus;
+                    const isHovered = hoverId === node.id;
                     const region = getRecipeRegion(node.recipe);
                     const r = radiusOf(node.id);
                     const minutes = minutesById.get(node.id) ?? null;
                     // Dim nodes that aren't selected/focused while something is active.
-                    const dim = (selectedId || activeFocusId) && !isActive;
-                    const label = node.recipe.title.length > 16
-                      ? `${node.recipe.title.slice(0, 14)}…`
+                    const dim = (selectedId || activeFocusId) && !isActive && !isHovered;
+                    // Title labels only appear for the active/hovered node to keep
+                    // the canvas readable; the time always shows inside the circle.
+                    const showLabel = isActive || isHovered;
+                    const label = node.recipe.title.length > 22
+                      ? `${node.recipe.title.slice(0, 20)}…`
                       : node.recipe.title;
                     return (
                       <g
@@ -445,40 +461,62 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                         aria-label={`${node.recipe.title}, ${region.label}, ${formatMinutes(minutes)}`}
                         aria-pressed={isSelected}
                         className="cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                        style={{ opacity: dim ? 0.35 : 1, transition: 'opacity 0.2s' }}
+                        style={{ opacity: dim ? 0.3 : 1, transition: 'opacity 0.2s' }}
                         onClick={() => handleSelectNode(node.id)}
                         onKeyDown={e => handleKeyNode(e, node.id)}
+                        onMouseEnter={() => setHoverId(node.id)}
+                        onMouseLeave={() => setHoverId(prev => (prev === node.id ? null : prev))}
+                        onFocus={() => setHoverId(node.id)}
+                        onBlur={() => setHoverId(prev => (prev === node.id ? null : prev))}
                       >
-                        {isActive && (
+                        {(isActive || isHovered) && (
                           <circle
-                            r={r + 7}
+                            r={r + 6}
                             fill="none"
                             stroke={regionFill(region, true)}
-                            strokeWidth={2}
-                            opacity={0.5}
+                            strokeWidth={2.5}
+                            opacity={0.55}
                           />
                         )}
                         <circle
                           r={r}
                           fill={regionFill(region, isActive)}
-                          stroke={isActive ? regionFill(region, true) : regionStroke(region)}
-                          strokeWidth={isActive ? 4 : 2}
+                          stroke={isActive ? '#fff' : regionStroke(region)}
+                          strokeWidth={isActive ? 3 : 1.5}
                         />
-                        <text
-                          y={4}
-                          textAnchor="middle"
-                          className="fill-white font-label font-bold pointer-events-none"
-                          style={{ fontSize: Math.max(8, Math.min(11, r / 3)) }}
-                        >
-                          {formatMinutes(minutes).replace(' min', 'm').replace(' hr', 'h')}
-                        </text>
-                        <text
-                          y={r + 15}
-                          textAnchor="middle"
-                          className="fill-on-surface text-[10px] font-label font-bold tracking-wide pointer-events-none"
-                        >
-                          {label}
-                        </text>
+                        {r >= 20 && (
+                          <text
+                            y={4}
+                            textAnchor="middle"
+                            className="fill-white font-label font-bold pointer-events-none"
+                            style={{ fontSize: Math.max(9, Math.min(12, r / 3.2)) }}
+                          >
+                            {formatMinutes(minutes)
+                              .replace(' min', 'm')
+                              .replace(' hr', 'h')
+                              .replace('Time unknown', '?')}
+                          </text>
+                        )}
+                        {showLabel && (
+                          <g className="pointer-events-none">
+                            <rect
+                              x={-label.length * 3.4 - 6}
+                              y={r + 4}
+                              width={label.length * 6.8 + 12}
+                              height={18}
+                              rx={9}
+                              className="fill-surface-container-high"
+                              opacity={0.95}
+                            />
+                            <text
+                              y={r + 16}
+                              textAnchor="middle"
+                              className="fill-on-surface text-[11px] font-label font-bold tracking-wide"
+                            >
+                              {label}
+                            </text>
+                          </g>
+                        )}
                       </g>
                     );
                   })}

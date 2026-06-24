@@ -10,7 +10,9 @@ function resolveDark(preference: ThemePreference): boolean {
 }
 
 function applyTheme(preference: ThemePreference): void {
-  document.documentElement.classList.toggle('dark-dim', resolveDark(preference));
+  const dark = resolveDark(preference);
+  document.documentElement.classList.toggle('dark-dim', dark);
+  document.body.style.backgroundColor = dark ? '#1b1c19' : '#fbf9f4';
 }
 
 function readPreference(): ThemePreference {

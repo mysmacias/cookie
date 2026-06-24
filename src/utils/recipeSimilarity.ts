@@ -50,38 +50,89 @@ const REGIONS: Record<string, RegionInfo> = {
   unknown: { key: 'unknown', label: 'Unspecified', hue: 220 },
 };
 
-/** Cuisine keyword → region key. Keep in sync with CUISINE_KEYWORDS. */
+/**
+ * Cuisine / regional keyword → region key. Keys are matched (case-insensitive,
+ * whole-word) against both a recipe's category and its tags, so recipes that
+ * only encode origin in the category field (e.g. "Korean", "North African",
+ * "Coastal Latin") are still colored correctly.
+ */
 const CUISINE_TO_REGION: Record<string, string> = {
+  // Mediterranean
   mediterranean: 'mediterranean',
   italian: 'mediterranean',
   greek: 'mediterranean',
   spanish: 'mediterranean',
+  tapas: 'mediterranean',
+  // European
   french: 'european',
+  british: 'european',
+  german: 'european',
+  polish: 'european',
+  // Middle East & North Africa
   moroccan: 'middle-eastern',
   turkish: 'middle-eastern',
   lebanese: 'middle-eastern',
+  levant: 'middle-eastern',
+  levantine: 'middle-eastern',
   'middle eastern': 'middle-eastern',
+  'north african': 'middle-eastern',
+  // East & Southeast Asia
   asian: 'east-asian',
   chinese: 'east-asian',
+  sichuan: 'east-asian',
+  cantonese: 'east-asian',
   japanese: 'east-asian',
   korean: 'east-asian',
   thai: 'east-asian',
+  vietnamese: 'east-asian',
+  indonesian: 'east-asian',
+  filipino: 'east-asian',
+  // South Asia
   indian: 'south-asian',
+  'sri lankan': 'south-asian',
+  pakistani: 'south-asian',
+  // Americas
   mexican: 'americas',
   american: 'americas',
-  british: 'european',
-  german: 'european',
-  african: 'african',
   caribbean: 'americas',
+  brazilian: 'americas',
+  'coastal latin': 'americas',
   latin: 'americas',
   southern: 'americas',
   cajun: 'americas',
+  creole: 'americas',
+  peruvian: 'americas',
+  // Africa
+  african: 'african',
+  ethiopian: 'african',
+  nigerian: 'african',
 };
 
-/** Determine the region of origin for a recipe from its cuisine tags. */
+// Match longer keys first so "north african" wins over "african", etc.
+const CUISINE_KEYS_BY_LENGTH = Object.keys(CUISINE_TO_REGION).sort(
+  (a, b) => b.length - a.length,
+);
+
+function regionFromText(text: string): string | null {
+  const haystack = ` ${text.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ')} `;
+  for (const key of CUISINE_KEYS_BY_LENGTH) {
+    if (haystack.includes(` ${key} `)) {
+      return CUISINE_TO_REGION[key];
+    }
+  }
+  return null;
+}
+
+/**
+ * Determine the region of origin for a recipe. Checks the category first
+ * (where most origin data lives), then falls back to cuisine tags.
+ */
 export function getRecipeRegion(recipe: Recipe): RegionInfo {
-  for (const tag of cuisineSet(recipe)) {
-    const regionKey = CUISINE_TO_REGION[tag];
+  const fromCategory = regionFromText(recipe.category ?? '');
+  if (fromCategory && REGIONS[fromCategory]) return REGIONS[fromCategory];
+
+  for (const tag of recipe.tags ?? []) {
+    const regionKey = regionFromText(tag);
     if (regionKey && REGIONS[regionKey]) return REGIONS[regionKey];
   }
   return REGIONS.unknown;
@@ -111,17 +162,17 @@ export function parseRecipeTimeMinutes(time: string | undefined): number | null 
   let minutes = 0;
   let matched = false;
 
-  const dayMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:days?|d)\b/);
+  const dayMatch = text.match(/(\d+(?:\.\d+)?)\s*\+?\s*(?:days?|d)\b/);
   if (dayMatch) {
     minutes += parseFloat(dayMatch[1]) * 24 * 60;
     matched = true;
   }
-  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:hrs?|hours?|h)\b/);
+  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*\+?\s*(?:hrs?|hours?|h)\b/);
   if (hourMatch) {
     minutes += parseFloat(hourMatch[1]) * 60;
     matched = true;
   }
-  const minMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:mins?|minutes?|m)\b/);
+  const minMatch = text.match(/(\d+(?:\.\d+)?)\s*\+?\s*(?:mins?|minutes?|m)\b/);
   if (minMatch) {
     minutes += parseFloat(minMatch[1]);
     matched = true;
@@ -333,9 +384,11 @@ export function buildRecipeGraph(recipes: Recipe[], options: BuildGraphOptions =
     connectedIds.add(edge.target);
   }
 
-  // Keep isolated recipes visible when the library is small
+  // Keep every recipe visible for reasonably sized libraries so the graph
+  // reads as a full map (colored by region, sized by cook time). Only drop
+  // isolated nodes once the library gets large enough to clutter the canvas.
   const prunedNodes =
-    filtered.length <= 12
+    filtered.length <= 80
       ? nodes
       : nodes.filter(n => connectedIds.has(n.id));
 

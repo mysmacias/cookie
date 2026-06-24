@@ -4,6 +4,9 @@ import {
   buildRecipeGraph,
   getSimilarRecipes,
   normalizeIngredientName,
+  parseRecipeTimeMinutes,
+  getRecipeRegion,
+  getRegionLegend,
 } from './recipeSimilarity';
 import type { Recipe } from '../types';
 
@@ -172,5 +175,66 @@ describe('getSimilarRecipes', () => {
 
   it('returns empty array for unknown id', () => {
     expect(getSimilarRecipes('missing', [pastaA])).toEqual([]);
+  });
+});
+
+describe('parseRecipeTimeMinutes', () => {
+  it('parses minutes', () => {
+    expect(parseRecipeTimeMinutes('30 min')).toBe(30);
+    expect(parseRecipeTimeMinutes('45 mins')).toBe(45);
+    expect(parseRecipeTimeMinutes('10m')).toBe(10);
+  });
+
+  it('parses hours and combined hours + minutes', () => {
+    expect(parseRecipeTimeMinutes('2 hrs')).toBe(120);
+    expect(parseRecipeTimeMinutes('1 hr 15 mins')).toBe(75);
+  });
+
+  it('parses days', () => {
+    expect(parseRecipeTimeMinutes('2 days')).toBe(2 * 24 * 60);
+    expect(parseRecipeTimeMinutes('24 hrs')).toBe(1440);
+  });
+
+  it('handles messy and empty values', () => {
+    expect(parseRecipeTimeMinutes('14+ hrs')).toBe(14 * 60);
+    expect(parseRecipeTimeMinutes('')).toBeNull();
+    expect(parseRecipeTimeMinutes(undefined)).toBeNull();
+    expect(parseRecipeTimeMinutes('overnight')).toBeNull();
+  });
+});
+
+describe('getRecipeRegion', () => {
+  it('derives region from the category', () => {
+    expect(getRecipeRegion(makeRecipe({ id: 'k', title: 'Bibimbap', category: 'Korean' })).key).toBe('east-asian');
+    expect(getRecipeRegion(makeRecipe({ id: 'n', title: 'Tagine', category: 'North African' })).key).toBe('middle-eastern');
+    expect(getRecipeRegion(makeRecipe({ id: 'c', title: 'Jerk', category: 'Caribbean' })).key).toBe('americas');
+  });
+
+  it('falls back to cuisine tags when category is generic', () => {
+    const r = makeRecipe({ id: 't', title: 'Pasta', category: 'Main', tags: ['italian'] });
+    expect(getRecipeRegion(r).key).toBe('mediterranean');
+  });
+
+  it('returns unknown when no region can be determined', () => {
+    expect(getRecipeRegion(makeRecipe({ id: 'x', title: 'Mystery', category: 'Main', tags: ['quick'] })).key).toBe('unknown');
+  });
+
+  it('prefers the more specific multi-word region (north african over african)', () => {
+    expect(getRecipeRegion(makeRecipe({ id: 'm', title: 'Tagine', category: 'North African' })).key).toBe('middle-eastern');
+  });
+});
+
+describe('getRegionLegend', () => {
+  it('lists the distinct regions present, without duplicates', () => {
+    const recipes = [
+      makeRecipe({ id: '1', title: 'A', category: 'Korean' }),
+      makeRecipe({ id: '2', title: 'B', category: 'Japanese' }),
+      makeRecipe({ id: '3', title: 'C', category: 'Greek' }),
+    ];
+    const legend = getRegionLegend(recipes);
+    const keys = legend.map(r => r.key);
+    expect(keys).toContain('east-asian');
+    expect(keys).toContain('mediterranean');
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
