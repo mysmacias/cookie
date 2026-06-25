@@ -56,22 +56,22 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
   return (
     <>
       <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 safe-area-top print:hidden">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              className="p-2 -ml-2 hover:text-primary transition-colors"
+              className="p-1.5 -ml-1.5 hover:text-primary transition-colors"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-expanded={isMenuOpen}
               aria-controls="side-menu"
               aria-label="Toggle menu"
             >
-              <Menu />
+              <Menu size={20} />
             </button>
             <button
               type="button"
               onClick={() => navigateTo('library')}
-              className="text-3xl font-headline font-bold italic tracking-[-0.06em] text-primary hover:opacity-70 transition-opacity"
+              className="text-xl font-headline font-bold italic tracking-[-0.06em] text-primary hover:opacity-70 transition-opacity"
             >
               COOKIE
             </button>
@@ -80,9 +80,9 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
           <button
             type="button"
             onClick={() => navigateTo('add')}
-            className="flex items-center space-x-2 bg-primary text-on-primary px-5 py-2.5 rounded-full hover:bg-primary-container transition-colors text-sm font-label uppercase tracking-widest"
+            className="flex items-center gap-1.5 bg-primary text-on-primary px-3.5 py-1.5 rounded-full hover:bg-primary-container transition-colors text-xs font-label uppercase tracking-widest"
           >
-            <Plus size={16} />
+            <Plus size={14} />
             <span className="hidden sm:inline">Add Recipe</span>
           </button>
         </div>
@@ -114,15 +114,15 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
               aria-modal="true"
               aria-label="Navigation menu"
             >
-              <div className="flex items-center justify-between px-6 h-20 border-b border-outline-variant/30 shrink-0">
-                <span className="text-2xl font-headline font-bold italic tracking-[-0.06em] text-primary">COOKIE</span>
+              <div className="flex items-center justify-between px-6 h-14 border-b border-outline-variant/30 shrink-0">
+                <span className="text-xl font-headline font-bold italic tracking-[-0.06em] text-primary">COOKIE</span>
                 <button
                   type="button"
                   onClick={closeMenu}
-                  className="p-2 -mr-2 hover:text-primary transition-colors"
+                  className="p-1.5 -mr-1.5 hover:text-primary transition-colors"
                   aria-label="Close menu"
                 >
-                  <X />
+                  <X size={20} />
                 </button>
               </div>
 
