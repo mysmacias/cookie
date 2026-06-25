@@ -3,6 +3,7 @@ import { RECIPES } from '../data/bundledRecipes';
 import { MEALDB_SEED_RECIPES } from '../data/mealDbSeeds';
 import { RECIPE_API_SEED_RECIPES } from '../data/recipeApiSeeds';
 import { applyBundledRecipeMedia } from '../utils/applyBundledRecipeMedia';
+import { normalizeRecipeTaxonomy } from '../utils/recipeTaxonomy';
 import {
   getCachedBookmarks,
   getCachedOverrides,
@@ -21,7 +22,9 @@ export function getAllRecipes(): Recipe[] {
   for (const recipe of [...bundled, ...seeded, ...imported]) {
     recipesById.set(recipe.id, recipe);
   }
-  return [...recipesById.values()];
+  // Single place every recipe passes through: derive the cuisine facet and
+  // mirror the primary cuisine onto `category` for display/sort.
+  return [...recipesById.values()].map(normalizeRecipeTaxonomy);
 }
 
 export function isBookmarked(recipeId: string): boolean {

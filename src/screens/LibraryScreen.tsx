@@ -40,8 +40,8 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
     if (lib.filter === 'bookmarked') {
       return 'No bookmarked recipes yet. Tap the heart icon on any recipe to save it here.';
     }
-    if (lib.categoryFilter || lib.tagFilters.length > 0) {
-      return 'No recipes match your filters. Try clearing category or tag filters.';
+    if (lib.cuisineFilters.length > 0 || lib.tagFilters.length > 0) {
+      return 'No recipes match your filters. Try clearing cuisine or tag filters.';
     }
     if (lib.searchQuery.trim()) {
       return 'No recipes match your search. Try a different term or clear the filter.';
@@ -80,53 +80,15 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
         onAddRecipe={() => navigateTo('add')}
         gridCols={lib.gridCols}
         setGridCols={lib.setGridCols}
+        cuisines={lib.cuisines}
+        cuisineFilters={lib.cuisineFilters}
+        toggleCuisineFilter={lib.toggleCuisineFilter}
+        clearCuisineFilters={lib.clearCuisineFilters}
+        allTags={lib.allTags}
+        tagFilters={lib.tagFilters}
+        toggleTagFilter={lib.toggleTagFilter}
+        clearTagFilters={lib.clearTagFilters}
       />
-
-      {(lib.categories.length > 0 || lib.allTags.length > 0) && (
-        <div className="space-y-4">
-          {lib.categories.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="group" aria-label="Filter by category">
-              <button
-                type="button"
-                onClick={() => lib.setCategoryFilter(null)}
-                className={`shrink-0 px-4 py-2 rounded-full text-xs font-label uppercase tracking-widest ${
-                  !lib.categoryFilter ? 'bg-primary text-on-primary font-bold' : 'border border-outline-variant'
-                }`}
-              >
-                All categories
-              </button>
-              {lib.categories.map(cat => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => lib.setCategoryFilter(cat === lib.categoryFilter ? null : cat)}
-                  className={`shrink-0 px-4 py-2 rounded-full text-xs font-label uppercase tracking-widest ${
-                    lib.categoryFilter === cat ? 'bg-primary text-on-primary font-bold' : 'border border-outline-variant'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          )}
-          {lib.allTags.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="group" aria-label="Filter by tag">
-              {lib.allTags.map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => lib.toggleTagFilter(tag)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-label uppercase tracking-widest ${
-                    lib.tagFilters.includes(tag) ? 'bg-secondary text-on-primary font-bold' : 'border border-outline-variant'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16">

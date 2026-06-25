@@ -20,7 +20,7 @@ export type LibrarySort =
 export const SORT_OPTIONS: { value: LibrarySort; label: string }[] = [
   { value: 'title-asc', label: 'Title A–Z' },
   { value: 'title-desc', label: 'Title Z–A' },
-  { value: 'category-asc', label: 'Category' },
+  { value: 'category-asc', label: 'Cuisine' },
   { value: 'difficulty-asc', label: 'Difficulty · easy first' },
   { value: 'difficulty-desc', label: 'Difficulty · hard first' },
   { value: 'added-desc', label: 'Date added · newest' },
@@ -100,6 +100,7 @@ function recipeMatchesSearch(query: string, r: Recipe): boolean {
   if (!q) return true;
   if (r.title.toLowerCase().includes(q)) return true;
   if (r.category.toLowerCase().includes(q)) return true;
+  if (r.cuisines?.some(c => c.toLowerCase().includes(q))) return true;
   if (r.description.toLowerCase().includes(q)) return true;
   if (r.tags?.some(t => t.toLowerCase().includes(q))) return true;
   if (r.ingredients.some(i => i.name.toLowerCase().includes(q))) return true;
@@ -115,7 +116,7 @@ export function useLibraryFilters() {
   const [gridCols, setGridColsState] = useState(savedGridCols);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Record<string, true>>({});
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [cuisineFilters, setCuisineFilters] = useState<string[]>([]);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
 
   const tierIndexRef = useRef(colsToTierIndex(gridCols));
@@ -155,9 +156,11 @@ export function useLibraryFilters() {
 
   const bookmarkedSet = useMemo(() => new Set(bookmarkedIds), [bookmarkedIds]);
 
-  const categories = useMemo(() => {
+  const cuisines = useMemo(() => {
     const set = new Set<string>();
-    for (const r of recipes) set.add(r.category);
+    for (const r of recipes) {
+      for (const c of r.cuisines ?? []) set.add(c);
+    }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [recipes]);
 
@@ -169,11 +172,21 @@ export function useLibraryFilters() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [recipes]);
 
+  const toggleCuisineFilter = useCallback((cuisine: string) => {
+    setCuisineFilters(prev =>
+      prev.includes(cuisine) ? prev.filter(c => c !== cuisine) : [...prev, cuisine],
+    );
+  }, []);
+
+  const clearCuisineFilters = useCallback(() => setCuisineFilters([]), []);
+
   const toggleTagFilter = useCallback((tag: string) => {
     setTagFilters(prev =>
       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag],
     );
   }, []);
+
+  const clearTagFilters = useCallback(() => setTagFilters([]), []);
 
   const setGridCols = useCallback((cols: number) => {
     const clamped = Math.max(1, Math.min(4, cols));
@@ -187,13 +200,14 @@ export function useLibraryFilters() {
     recipes
       .filter(r => recipeMatchesSearch(searchQuery, r))
       .filter(r => filter === 'all' || bookmarkedSet.has(r.id))
-      .filter(r => !categoryFilter || r.category === categoryFilter)
+      .filter(r => cuisineFilters.length === 0 ||
+        (r.cuisines ?? []).some(c => cuisineFilters.includes(c)))
       .filter(r => tagFilters.length === 0 || tagFilters.every(t =>
         r.tags?.some(rt => rt.toLowerCase() === t.toLowerCase()),
       ))
       .slice()
       .sort((a, b) => compareRecipes(a, b, sort)),
-    [recipes, searchQuery, filter, sort, bookmarkedSet, categoryFilter, tagFilters],
+    [recipes, searchQuery, filter, sort, bookmarkedSet, cuisineFilters, tagFilters],
   );
 
   const selectedRecipes = useMemo(
@@ -242,8 +256,8 @@ export function useLibraryFilters() {
     filteredRecipes, selectedRecipes, selectedCount,
     bookmarkedIds, bookmarkedSet, handleToggleBookmark,
     gridContainerRef, gridScale, gridColsClass, gridCols, setGridCols,
-    categories, categoryFilter, setCategoryFilter,
-    allTags, tagFilters, toggleTagFilter,
+    cuisines, cuisineFilters, toggleCuisineFilter, clearCuisineFilters,
+    allTags, tagFilters, toggleTagFilter, clearTagFilters,
     refreshRecipes,
   };
 }

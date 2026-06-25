@@ -25,6 +25,13 @@ export interface Recipe {
   bakeTime?: string;
   yields?: string;
   category: string;
+  /**
+   * Cuisines this recipe belongs to ("where it's from"), multi-valued so fusion
+   * dishes can list several (e.g. a ceviche tostada is Mexican + Peruvian).
+   * Populated by normalizeRecipeTaxonomy at load; `category` mirrors cuisines[0]
+   * for display/sort. Empty when the dish has no cuisine signal (e.g. cookies).
+   */
+  cuisines?: string[];
   /** Lowercase or mixed; matched case-insensitively in library search */
   tags?: string[];
   ingredients: Ingredient[];
