@@ -6,3 +6,6 @@ node_modules/
 .env.local
 .dev.vars
 .wrangler/
+
+# Regenerable D1 seed SQL (produced from data/recipes.json by scripts/load-recipes-d1.mjs)
+data/seed/

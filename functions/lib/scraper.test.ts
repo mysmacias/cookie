@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   extractJsonLdBlocks,
+  extractSchemaRecipeFromHtml,
   findSchemaRecipe,
   parseIngredientString,
   parseIsoDurationMinutes,
@@ -70,6 +71,26 @@ describe('scraper JSON-LD extraction', () => {
   it('resolves image URLs', () => {
     expect(resolveSchemaImage('https://example.com/a.jpg')).toBe('https://example.com/a.jpg');
     expect(resolveSchemaImage([{ url: 'https://example.com/b.jpg' }])).toBe('https://example.com/b.jpg');
+  });
+
+  it('extracts JSON-LD from unquoted script attributes (Yoast style)', () => {
+    const html = `<script type=application/ld+json class=yoast-schema-graph>
+      {"@context":"https://schema.org","@graph":[{"@type":"Recipe","name":"Guac","recipeIngredient":["1 avocado"]}]}
+    </script>`;
+    const recipe = extractSchemaRecipeFromHtml(html);
+    expect(recipe?.name).toBe('Guac');
+  });
+
+  it('picks the most complete recipe when a page embeds several', () => {
+    const html = `
+      <script type="application/ld+json">
+      {"@type":"Recipe","name":"Related Snippet","recipeIngredient":["1 thing"]}
+      </script>
+      <script type="application/ld+json">
+      {"@type":"Recipe","name":"Main Recipe","recipeIngredient":["a","b","c"],
+       "recipeInstructions":[{"@type":"HowToStep","text":"Do it"}]}
+      </script>`;
+    expect(extractSchemaRecipeFromHtml(html)?.name).toBe('Main Recipe');
   });
 });
 
