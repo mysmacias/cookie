@@ -55,7 +55,6 @@ function buildTags(recipe: RecipeApiRecipe): string[] {
   for (const tag of recipe.dietary_tags ?? []) {
     tags.add(tag.replace(/_/g, ' '));
   }
-  tags.add('imported');
   return [...tags];
 }
 

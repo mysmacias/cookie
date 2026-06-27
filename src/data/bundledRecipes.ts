@@ -17,8 +17,6 @@ export const RECIPES: Recipe[] = [
     "yields": "13",
     "category": "Sweet",
     "tags": [
-      "imported",
-      "web",
       "chocolate chip cookie recipe",
       "sweet",
       "western",
@@ -139,8 +137,6 @@ export const RECIPES: Recipe[] = [
     "yields": "1",
     "category": "Bread",
     "tags": [
-      "imported",
-      "web",
       "banana bread",
       "bread",
       "american",
@@ -233,8 +229,6 @@ export const RECIPES: Recipe[] = [
     "yields": "Cuts into 16 squares or 32 triangles",
     "category": "Afternoon tea, Dessert, Treat",
     "tags": [
-      "imported",
-      "web",
       "best",
       "best-ever",
       "brownies",
@@ -357,8 +351,6 @@ export const RECIPES: Recipe[] = [
     "yields": "Cuts into 10 slices",
     "category": "Afternoon tea, Buffet, Supper, Treat",
     "tags": [
-      "imported",
-      "web",
       "bbc good food",
       "birthday cake",
       "cake",
@@ -465,8 +457,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Pie",
     "tags": [
-      "imported",
-      "web",
       "apple pie baked apples",
       "baked apples",
       "pie",
@@ -560,8 +550,6 @@ export const RECIPES: Recipe[] = [
     "yields": "8",
     "category": "Bread",
     "tags": [
-      "imported",
-      "web",
       "homemade bagels recipe",
       "bread",
       "american",
@@ -666,8 +654,6 @@ export const RECIPES: Recipe[] = [
     "yields": "8",
     "category": "Breakfast",
     "tags": [
-      "imported",
-      "web",
       "scones",
       "breakfast",
       "american",
@@ -768,8 +754,6 @@ export const RECIPES: Recipe[] = [
     "yields": "3",
     "category": "Mains",
     "tags": [
-      "imported",
-      "web",
       "easy pizza dough",
       "pizza dough",
       "mains",
@@ -863,8 +847,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Breakfast",
     "tags": [
-      "imported",
-      "web",
       "fluffy pancakes",
       "homemade pancakes",
       "pancakes",
@@ -959,8 +941,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Breakfast",
     "tags": [
-      "imported",
-      "web",
       "shakshuka",
       "shakshuka recipe",
       "breakfast",
@@ -1054,8 +1034,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Mains",
     "tags": [
-      "imported",
-      "web",
       "carbonara",
       "spaghetti alla carbonara",
       "mains",
@@ -1157,8 +1135,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Imported",
     "tags": [
-      "imported",
-      "web",
       "no tomato pasta sauce",
       "red sauce",
       "spaghetti sauce",
@@ -1255,8 +1231,6 @@ export const RECIPES: Recipe[] = [
     "yields": "5",
     "category": "Dinner",
     "tags": [
-      "imported",
-      "web",
       "baked chicken thighs with rice",
       "chicken and rice",
       "chicken and rice recipe",
@@ -1375,8 +1349,6 @@ export const RECIPES: Recipe[] = [
     "yields": "3",
     "category": "Chicken",
     "tags": [
-      "imported",
-      "web",
       "butter chicken",
       "chicken",
       "indian",
@@ -1497,8 +1469,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Mains",
     "tags": [
-      "imported",
-      "web",
       "green curry",
       "thai green curry",
       "mains",
@@ -1652,8 +1622,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Dinner",
     "tags": [
-      "imported",
-      "web",
       "baked fajitas",
       "baked salmon recipe",
       "salmon fajitas",
@@ -1775,8 +1743,6 @@ export const RECIPES: Recipe[] = [
     "yields": "5",
     "category": "Dinner",
     "tags": [
-      "imported",
-      "web",
       "roast chicken",
       "dinner",
       "recipetineats.com"
@@ -1908,8 +1874,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Main",
     "tags": [
-      "imported",
-      "web",
       "beef stroganoff",
       "beef stroganoff recipe",
       "main",
@@ -2031,8 +1995,6 @@ export const RECIPES: Recipe[] = [
     "yields": "6",
     "category": "Side",
     "tags": [
-      "imported",
-      "web",
       "baked mac and cheese",
       "best mac and cheese",
       "mac and cheese recipe",
@@ -2132,8 +2094,6 @@ export const RECIPES: Recipe[] = [
     "yields": "12",
     "category": "Appetizer",
     "tags": [
-      "imported",
-      "web",
       "appetizer",
       "recipetineats.com"
     ],
@@ -2259,8 +2219,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Salad",
     "tags": [
-      "imported",
-      "web",
       "greek salad dressing",
       "greek salad recipe",
       "salad",
@@ -2350,8 +2308,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Soup",
     "tags": [
-      "imported",
-      "web",
       "lentil soup",
       "lentil soup recipe",
       "soup",
@@ -2457,8 +2413,6 @@ export const RECIPES: Recipe[] = [
     "yields": "3",
     "category": "Soup",
     "tags": [
-      "imported",
-      "web",
       "creamy tomato soup",
       "fall",
       "summer",
@@ -2565,8 +2519,6 @@ export const RECIPES: Recipe[] = [
     "yields": "4",
     "category": "Appetizer",
     "tags": [
-      "imported",
-      "web",
       "guacamole",
       "guacamole recipe",
       "how to make guacamole",
@@ -2636,8 +2588,6 @@ export const RECIPES: Recipe[] = [
     "yields": "8",
     "category": "Appetizer",
     "tags": [
-      "imported",
-      "web",
       "how to make hummus",
       "hummus",
       "hummus recipe",
@@ -2708,8 +2658,6 @@ export const RECIPES: Recipe[] = [
     "yields": "2",
     "category": "Main Course",
     "tags": [
-      "imported",
-      "web",
       "pesto gnocchi",
       "pesto gnocchi recipe",
       "main course",

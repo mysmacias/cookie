@@ -203,7 +203,7 @@ function formatCategory(recipeCategory) {
 }
 
 function buildTags(schema, sourceUrl) {
-  const tags = new Set(['imported', 'web']);
+  const tags = new Set();
   const keywords = schema.keywords;
   if (typeof keywords === 'string') {
     keywords.split(/[,;]+/).forEach(k => {
