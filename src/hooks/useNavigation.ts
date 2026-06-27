@@ -138,7 +138,7 @@ function pathFor(
 
 function focusMain(): void {
   requestAnimationFrame(() => {
-    document.getElementById('main')?.focus();
+    document.getElementById('main')?.focus({ preventScroll: true });
   });
 }
 
