@@ -5,6 +5,7 @@ import { Screen } from '../hooks/useNavigation';
 import { useAuth } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { CookieLogo } from './CookieLogo';
 
 interface HeaderProps {
   currentScreen: Screen;
@@ -68,13 +69,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
             >
               <Menu />
             </button>
-            <button
-              type="button"
-              onClick={() => navigateTo('library')}
-              className="text-3xl font-headline font-bold italic tracking-[-0.06em] text-primary hover:opacity-70 transition-opacity"
-            >
-              COOKIE
-            </button>
+            <CookieLogo onClick={() => navigateTo('library')} reducedMotion={reducedMotion} />
           </div>
 
           <button
