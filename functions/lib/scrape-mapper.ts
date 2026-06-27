@@ -57,7 +57,7 @@ function formatCategory(recipeCategory: SchemaRecipe['recipeCategory']): string 
 }
 
 function buildTags(schema: SchemaRecipe, sourceUrl: string): string[] {
-  const tags = new Set<string>(['imported', 'web']);
+  const tags = new Set<string>();
   const keywords = schema.keywords;
   if (typeof keywords === 'string') {
     keywords.split(/[,;]+/).forEach(k => {

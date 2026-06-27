@@ -15,7 +15,6 @@ export const MEALDB_SEED_RECIPES = [
     "tags": [
       "chicken",
       "greek",
-      "imported",
       "mealdb",
       "mediterranean"
     ],
@@ -117,7 +116,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Seafood",
     "tags": [
       "greek",
-      "imported",
       "mealdb",
       "mediterranean",
       "seafood",
@@ -236,7 +234,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Vegetarian",
     "tags": [
       "greek",
-      "imported",
       "mealdb",
       "mediterranean",
       "vegetarian"
@@ -344,7 +341,6 @@ export const MEALDB_SEED_RECIPES = [
     "tags": [
       "dessert",
       "greek",
-      "imported",
       "mealdb",
       "mediterranean",
       "sweet"
@@ -451,7 +447,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Lamb",
     "tags": [
       "greek",
-      "imported",
       "lamb",
       "mealdb",
       "mediterranean"
@@ -546,7 +541,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Lamb",
     "tags": [
       "greek",
-      "imported",
       "lamb",
       "mealdb",
       "mediterranean"
@@ -638,7 +632,6 @@ export const MEALDB_SEED_RECIPES = [
     "tags": [
       "beef",
       "greek",
-      "imported",
       "mealdb",
       "mediterranean"
     ],
@@ -720,7 +713,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Lamb",
     "tags": [
       "greek",
-      "imported",
       "lamb",
       "mealdb",
       "mediterranean"
@@ -852,7 +844,6 @@ export const MEALDB_SEED_RECIPES = [
       "calorific",
       "desert",
       "dessert",
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -929,7 +920,6 @@ export const MEALDB_SEED_RECIPES = [
     "tags": [
       "chicken",
       "dairy",
-      "imported",
       "italian",
       "mealdb",
       "meat",
@@ -1108,7 +1098,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Pasta",
     "tags": [
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -1223,7 +1212,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Pasta",
     "tags": [
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -1290,7 +1278,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Pasta",
     "tags": [
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -1381,7 +1368,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Pasta",
     "tags": [
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -1537,7 +1523,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Seafood",
     "tags": [
       "baking",
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -1645,7 +1630,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Miscellaneous",
     "tags": [
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -1908,7 +1892,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Pasta",
     "tags": [
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -1991,7 +1974,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Miscellaneous",
     "tags": [
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -2107,7 +2089,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Chicken",
     "tags": [
       "chicken",
-      "imported",
       "italian",
       "mealdb",
       "mediterranean"
@@ -2189,7 +2170,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Vegetarian",
     "tags": [
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -2312,7 +2292,6 @@ export const MEALDB_SEED_RECIPES = [
     "prepTime": "—",
     "category": "Lamb",
     "tags": [
-      "imported",
       "italian",
       "lamb",
       "mealdb",
@@ -2461,7 +2440,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Seafood",
     "tags": [
       "fish",
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -2562,7 +2540,6 @@ export const MEALDB_SEED_RECIPES = [
     "tags": [
       "bbq",
       "breakfast",
-      "imported",
       "italian",
       "mealdb",
       "mediterranean",
@@ -2754,7 +2731,6 @@ export const MEALDB_SEED_RECIPES = [
     "category": "Beef",
     "tags": [
       "beef",
-      "imported",
       "italian",
       "mealdb",
       "meat",

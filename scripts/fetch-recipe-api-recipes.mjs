@@ -101,7 +101,6 @@ function buildTags(recipe) {
     if (value) tags.add(String(value).replace(/_/g, ' ').toLowerCase());
   }
   tags.add('mediterranean');
-  tags.add('imported');
   return [...tags].sort();
 }
 

@@ -75,7 +75,7 @@ function extractIngredients(meal) {
 }
 
 function buildTags(meal) {
-  const tags = new Set(['mealdb', 'imported']);
+  const tags = new Set(['mealdb']);
   if (meal.strArea) tags.add(String(meal.strArea).toLowerCase());
   if (meal.strCategory) tags.add(String(meal.strCategory).toLowerCase());
   for (const tag of String(meal.strTags ?? '').split(',')) {
