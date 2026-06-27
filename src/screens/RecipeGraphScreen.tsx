@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Play, ExternalLink, Network, ChefHat, Clock } from 'lucide-react';
+import { ChevronLeft, Play, ExternalLink, Network, ChefHat, Clock, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { Screen } from '../hooks/useNavigation';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { useRecipes } from '../context/RecipeContext';
@@ -35,6 +35,7 @@ const SVG_SIZE = 640;
 const MIN_NODE_RADIUS = 16;
 const MAX_NODE_RADIUS = 42;
 const DEFAULT_THRESHOLD = 0.25;
+const TOTAL_ITERATIONS = 240;
 
 /** Region color helpers: derive fill/stroke from a region's hue. */
 function regionFill(region: RegionInfo, emphasis = false): string {
@@ -83,13 +84,29 @@ function parseFocusFromUrl(): string | null {
   return focus?.trim() || null;
 }
 
-function runForceLayout(
+interface ForceSimulation {
+  /** Live positions, mutated in place each tick. */
+  positions: Map<string, NodePosition>;
+  /** Advance the simulation by one iteration. No-op once finished. */
+  tick: () => void;
+  /** True once all iterations have run. */
+  done: boolean;
+}
+
+/**
+ * Build a steppable force-directed layout. Seeding happens up front (so nodes
+ * can be painted immediately) while the expensive relaxation is exposed as
+ * discrete `tick()`s — the screen drives these across animation frames so the
+ * graph settles in without blocking the main thread on mount.
+ */
+function createForceSimulation(
   nodeIds: string[],
   edges: GraphEdge[],
   focusId: string | null,
   radiusOf: (id: string) => number,
-  iterations = 220,
-): Map<string, NodePosition> {
+  iterations = TOTAL_ITERATIONS,
+  seed?: Map<string, NodePosition>,
+): ForceSimulation {
   const positions = new Map<string, NodePosition>();
   const center = SVG_SIZE / 2;
   const n = Math.max(nodeIds.length, 1);
@@ -99,14 +116,17 @@ function runForceLayout(
   const spread = Math.min(SVG_SIZE * 0.46, SVG_SIZE * (0.22 + n * 0.006));
 
   nodeIds.forEach((id, i) => {
-    // Golden-angle spiral seeds nodes evenly across the disk, not just a ring.
+    // Reuse a node's previous position when we have one so filter/focus changes
+    // glide from where things were instead of re-scrambling from scratch. New
+    // nodes drop onto a golden-angle spiral that fills the disk evenly.
+    const prev = seed?.get(id);
     const t = (i + 0.5) / n;
     const angle = i * 2.399963229728653;
     const rad = spread * Math.sqrt(t);
     positions.set(id, {
       id,
-      x: focusId === id ? center : center + rad * Math.cos(angle),
-      y: focusId === id ? center : center + rad * Math.sin(angle),
+      x: focusId === id ? center : prev?.x ?? center + rad * Math.cos(angle),
+      y: focusId === id ? center : prev?.y ?? center + rad * Math.sin(angle),
     });
   });
 
@@ -115,73 +135,85 @@ function runForceLayout(
   // Gravity weakens as the graph grows, letting it use the whole canvas.
   const gravity = Math.max(0.006, 0.02 - n * 0.0002);
 
-  for (let iter = 0; iter < iterations; iter++) {
-    const cooling = 1 - iter / iterations;
+  let iter = 0;
+  const sim: ForceSimulation = {
+    positions,
+    done: nodeIds.length === 0,
+    tick() {
+      if (iter >= iterations) {
+        sim.done = true;
+        return;
+      }
+      const cooling = 1 - iter / iterations;
 
-    for (let i = 0; i < nodeIds.length; i++) {
-      for (let j = i + 1; j < nodeIds.length; j++) {
-        const a = positions.get(nodeIds[i])!;
-        const b = positions.get(nodeIds[j])!;
+      for (let i = 0; i < nodeIds.length; i++) {
+        for (let j = i + 1; j < nodeIds.length; j++) {
+          const a = positions.get(nodeIds[i])!;
+          const b = positions.get(nodeIds[j])!;
+          let dx = b.x - a.x;
+          let dy = b.y - a.y;
+          // Keep nodes apart relative to their combined radii so big (slow-cook)
+          // circles never overlap their neighbors.
+          const minGap = radiusOf(nodeIds[i]) + radiusOf(nodeIds[j]) + 22;
+          const dist = Math.max(Math.hypot(dx, dy), 0.5);
+          const overlap = dist < minGap ? (minGap - dist) * 0.5 : 0;
+          const repulse = repulseK / (dist * dist) + overlap;
+          dx = (dx / dist) * repulse;
+          dy = (dy / dist) * repulse;
+          if (nodeIds[i] !== focusId) {
+            a.x -= dx;
+            a.y -= dy;
+          }
+          if (nodeIds[j] !== focusId) {
+            b.x += dx;
+            b.y += dy;
+          }
+        }
+      }
+
+      for (const edge of edges) {
+        const a = positions.get(edge.source);
+        const b = positions.get(edge.target);
+        if (!a || !b) continue;
         let dx = b.x - a.x;
         let dy = b.y - a.y;
-        // Keep nodes apart relative to their combined radii so big (slow-cook)
-        // circles never overlap their neighbors.
-        const minGap = radiusOf(nodeIds[i]) + radiusOf(nodeIds[j]) + 22;
-        const dist = Math.max(Math.hypot(dx, dy), 0.5);
-        const overlap = dist < minGap ? (minGap - dist) * 0.5 : 0;
-        const repulse = repulseK / (dist * dist) + overlap;
-        dx = (dx / dist) * repulse;
-        dy = (dy / dist) * repulse;
-        if (nodeIds[i] !== focusId) {
-          a.x -= dx;
-          a.y -= dy;
+        const dist = Math.max(Math.hypot(dx, dy), 1);
+        const ideal = radiusOf(edge.source) + radiusOf(edge.target) + 70;
+        const attract = (dist - ideal) * 0.05 * edge.weight;
+        dx = (dx / dist) * attract;
+        dy = (dy / dist) * attract;
+        if (edge.source !== focusId) {
+          a.x += dx;
+          a.y += dy;
         }
-        if (nodeIds[j] !== focusId) {
-          b.x += dx;
-          b.y += dy;
+        if (edge.target !== focusId) {
+          b.x -= dx;
+          b.y -= dy;
         }
       }
-    }
 
-    for (const edge of edges) {
-      const a = positions.get(edge.source);
-      const b = positions.get(edge.target);
-      if (!a || !b) continue;
-      let dx = b.x - a.x;
-      let dy = b.y - a.y;
-      const dist = Math.max(Math.hypot(dx, dy), 1);
-      const ideal = radiusOf(edge.source) + radiusOf(edge.target) + 70;
-      const attract = (dist - ideal) * 0.05 * edge.weight;
-      dx = (dx / dist) * attract;
-      dy = (dy / dist) * attract;
-      if (edge.source !== focusId) {
-        a.x += dx;
-        a.y += dy;
+      for (const id of nodeIds) {
+        const p = positions.get(id)!;
+        if (id === focusId) {
+          p.x = center;
+          p.y = center;
+          continue;
+        }
+        // Gentle pull toward center keeps the graph from drifting off-canvas
+        // without crushing it into a ball.
+        p.x += (center - p.x) * gravity * cooling;
+        p.y += (center - p.y) * gravity * cooling;
+        const margin = radiusOf(id) + 14;
+        p.x = Math.min(SVG_SIZE - margin, Math.max(margin, p.x));
+        p.y = Math.min(SVG_SIZE - margin, Math.max(margin, p.y));
       }
-      if (edge.target !== focusId) {
-        b.x -= dx;
-        b.y -= dy;
-      }
-    }
 
-    for (const id of nodeIds) {
-      const p = positions.get(id)!;
-      if (id === focusId) {
-        p.x = center;
-        p.y = center;
-        continue;
-      }
-      // Gentle pull toward center keeps the graph from drifting off-canvas
-      // without crushing it into a ball.
-      p.x += (center - p.x) * gravity * cooling;
-      p.y += (center - p.y) * gravity * cooling;
-      const margin = radiusOf(id) + 14;
-      p.x = Math.min(SVG_SIZE - margin, Math.max(margin, p.x));
-      p.y = Math.min(SVG_SIZE - margin, Math.max(margin, p.y));
-    }
-  }
+      iter++;
+      if (iter >= iterations) sim.done = true;
+    },
+  };
 
-  return positions;
+  return sim;
 }
 
 function formatPercent(score: number): string {
@@ -201,11 +233,16 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
   const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
   const [hoverId, setHoverId] = useState<string | null>(null);
 
+  // Defer the heavy graph rebuild so dragging the slider stays smooth — the
+  // thumb tracks `threshold` immediately while the graph catches up at low
+  // priority instead of recomputing O(n²) similarity on every tick.
+  const deferredThreshold = useDeferredValue(threshold);
+
   const categories = useMemo(() => getRecipeCategories(ctx.recipes), [ctx.recipes]);
 
   const graph = useMemo(
-    () => buildRecipeGraph(ctx.recipes, { threshold, categoryFilter }),
-    [ctx.recipes, threshold, categoryFilter],
+    () => buildRecipeGraph(ctx.recipes, { threshold: deferredThreshold, categoryFilter }),
+    [ctx.recipes, deferredThreshold, categoryFilter],
   );
 
   const activeFocusId = focusId && graph.nodes.some(n => n.id === focusId) ? focusId : null;
@@ -236,10 +273,132 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
     [graph.nodes],
   );
 
-  const positions = useMemo(
-    () => runForceLayout(graph.nodes.map(n => n.id), graph.edges, activeFocusId, radiusOf),
-    [graph.nodes, graph.edges, activeFocusId, radiusOf],
-  );
+  // Positions are computed progressively (see effect below) rather than in
+  // render, so navigating to this screen paints instantly and the graph
+  // settles in afterward instead of blocking the main thread on mount.
+  const [positions, setPositions] = useState<Map<string, NodePosition>>(new Map());
+  const [isSettling, setIsSettling] = useState(true);
+  const rafRef = useRef<number | null>(null);
+  // Mirror of the latest positions so a re-layout can seed from where nodes
+  // currently are (continuity) without making `positions` an effect dependency.
+  const positionsRef = useRef<Map<string, NodePosition>>(new Map());
+
+  useEffect(() => {
+    const ids = graph.nodes.map(n => n.id);
+    if (ids.length === 0) {
+      positionsRef.current = new Map();
+      setPositions(positionsRef.current);
+      setIsSettling(false);
+      return;
+    }
+
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    const sim = createForceSimulation(
+      ids,
+      graph.edges,
+      activeFocusId,
+      radiusOf,
+      TOTAL_ITERATIONS,
+      positionsRef.current,
+    );
+
+    const commit = () => {
+      positionsRef.current = new Map(sim.positions);
+      setPositions(positionsRef.current);
+    };
+
+    // Reduced motion: solve in one deferred pass (still off the first paint, so
+    // entry stays snappy) and drop the node-by-node settling animation.
+    if (reduceMotion) {
+      while (!sim.done) sim.tick();
+      commit();
+      setIsSettling(false);
+      return;
+    }
+
+    // Paint the seeded layout immediately, then relax it over frames.
+    commit();
+    setIsSettling(true);
+
+    // Fewer iterations per frame for larger graphs keeps each frame cheap so
+    // the page stays responsive while the layout converges.
+    const perFrame = Math.max(3, Math.round(30 - ids.length / 8));
+
+    const step = () => {
+      for (let k = 0; k < perFrame && !sim.done; k++) sim.tick();
+      commit();
+      if (sim.done) {
+        setIsSettling(false);
+        rafRef.current = null;
+      } else {
+        rafRef.current = requestAnimationFrame(step);
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [graph.nodes, graph.edges, activeFocusId, radiusOf]);
+
+  const hasLayout = positions.size > 0;
+
+  // ---- Pan & zoom -------------------------------------------------------
+  // A single transform on the content group lets the user explore dense graphs
+  // without re-running the layout. Panning is driven by pointer drags on the
+  // canvas background (nodes stop propagation so taps still select).
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
+  const panRef = useRef({ active: false, lastX: 0, lastY: 0 });
+
+  // Recenter when the graph's subject changes; keep zoom across threshold drags.
+  useEffect(() => {
+    setView({ scale: 1, x: 0, y: 0 });
+  }, [activeFocusId, categoryFilter]);
+
+  const zoomBy = useCallback((factor: number) => {
+    setView(v => {
+      const scale = Math.min(4, Math.max(0.6, v.scale * factor));
+      // Keep the canvas center fixed while scaling.
+      const c = SVG_SIZE / 2;
+      return { scale, x: v.x + (v.scale - scale) * c, y: v.y + (v.scale - scale) * c };
+    });
+  }, []);
+
+  const resetView = useCallback(() => setView({ scale: 1, x: 0, y: 0 }), []);
+
+  const beginPan = (e: React.PointerEvent<SVGSVGElement>) => {
+    // On touch, only hijack the gesture once zoomed in so the page can still
+    // scroll past the graph at the default zoom.
+    if (e.pointerType === 'touch' && view.scale <= 1) return;
+    panRef.current = { active: true, lastX: e.clientX, lastY: e.clientY };
+    svgRef.current?.setPointerCapture?.(e.pointerId);
+  };
+
+  const movePan = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!panRef.current.active) return;
+    const rect = svgRef.current?.getBoundingClientRect();
+    const ratio = rect && rect.width ? SVG_SIZE / rect.width : 1;
+    const dx = (e.clientX - panRef.current.lastX) * ratio;
+    const dy = (e.clientY - panRef.current.lastY) * ratio;
+    panRef.current.lastX = e.clientX;
+    panRef.current.lastY = e.clientY;
+    setView(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
+  };
+
+  const endPan = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!panRef.current.active) return;
+    panRef.current.active = false;
+    svgRef.current?.releasePointerCapture?.(e.pointerId);
+  };
+
+  const isZoomed = view.scale !== 1 || view.x !== 0 || view.y !== 0;
 
   const selectedRecipe = useMemo(
     () => ctx.recipes.find(r => r.id === selectedId) ?? null,
@@ -256,9 +415,9 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
   const similarList = useMemo(() => {
     if (!activeFocusId) return [];
     return getSimilarRecipes(activeFocusId, ctx.recipes, 12).filter(
-      r => r.breakdown.score >= threshold,
+      r => r.breakdown.score >= deferredThreshold,
     );
-  }, [activeFocusId, ctx.recipes, threshold]);
+  }, [activeFocusId, ctx.recipes, deferredThreshold]);
 
   useEffect(() => {
     document.title = activeFocusId
@@ -275,6 +434,15 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
       setSelectedId(focusProp);
     }
   }, [focusProp]);
+
+  // On the stacked (mobile) layout the detail panel sits below the graph, so a
+  // node tap can scroll out of view. Bring the panel into view when a recipe is
+  // selected; on desktop the panel is already beside the graph (sticky), so skip.
+  useEffect(() => {
+    if (!selectedId || typeof window === 'undefined') return;
+    if (window.matchMedia('(min-width: 1024px)').matches) return;
+    asideRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selectedId]);
 
   const handleSelectNode = useCallback((id: string) => {
     setSelectedId(prev => (prev === id ? null : id));
@@ -393,19 +561,47 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
             {graph.nodes.length === 0 ? (
               <div className="rounded-2xl border border-outline-variant/40 bg-surface-container-low/50 p-12 text-center">
                 <p className="text-on-surface-variant">
-                  No recipes match these filters. Try lowering the similarity threshold.
+                  {ctx.isLoading
+                    ? 'Loading your recipes…'
+                    : 'No recipes match these filters. Try lowering the similarity threshold.'}
                 </p>
               </div>
             ) : (
               <div
-                className="rounded-2xl border border-outline-variant/30 bg-surface overflow-hidden"
+                className="relative rounded-2xl border border-outline-variant/30 bg-surface overflow-hidden"
                 role="img"
                 aria-label="Recipe similarity graph"
               >
+                {!hasLayout && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface">
+                    <span
+                      className="inline-block w-6 h-6 rounded-full border-2 border-outline-variant border-t-primary animate-spin"
+                      aria-hidden
+                    />
+                    <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
+                      Building graph…
+                    </p>
+                  </div>
+                )}
                 <svg
+                  ref={svgRef}
                   viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
                   className="w-full h-auto max-h-[min(80vh,680px)]"
+                  style={{
+                    opacity: hasLayout ? 1 : 0,
+                    transition: 'opacity 0.4s ease',
+                    touchAction: view.scale > 1 ? 'none' : 'pan-y',
+                    cursor: panRef.current.active ? 'grabbing' : 'grab',
+                  }}
+                  onPointerDown={beginPan}
+                  onPointerMove={movePan}
+                  onPointerUp={endPan}
+                  onPointerCancel={endPan}
                 >
+                  <g
+                    transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}
+                    style={{ transition: panRef.current.active ? 'none' : 'transform 0.18s ease' }}
+                  >
                   {graph.edges.map(edge => {
                     const a = positions.get(edge.source);
                     const b = positions.get(edge.target);
@@ -462,6 +658,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                         aria-pressed={isSelected}
                         className="cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                         style={{ opacity: dim ? 0.3 : 1, transition: 'opacity 0.2s' }}
+                        onPointerDown={e => e.stopPropagation()}
                         onClick={() => handleSelectNode(node.id)}
                         onKeyDown={e => handleKeyNode(e, node.id)}
                         onMouseEnter={() => setHoverId(node.id)}
@@ -520,7 +717,38 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                       </g>
                     );
                   })}
+                  </g>
                 </svg>
+
+                {hasLayout && (
+                  <div className="absolute top-3 right-3 flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => zoomBy(1.25)}
+                      aria-label="Zoom in"
+                      className="w-9 h-9 flex items-center justify-center rounded-full border border-outline-variant/50 bg-surface/90 backdrop-blur text-on-surface-variant hover:text-primary hover:border-primary/50 shadow-sm"
+                    >
+                      <ZoomIn size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => zoomBy(0.8)}
+                      aria-label="Zoom out"
+                      className="w-9 h-9 flex items-center justify-center rounded-full border border-outline-variant/50 bg-surface/90 backdrop-blur text-on-surface-variant hover:text-primary hover:border-primary/50 shadow-sm"
+                    >
+                      <ZoomOut size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetView}
+                      aria-label="Reset view"
+                      disabled={!isZoomed}
+                      className="w-9 h-9 flex items-center justify-center rounded-full border border-outline-variant/50 bg-surface/90 backdrop-blur text-on-surface-variant hover:text-primary hover:border-primary/50 shadow-sm disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      <Maximize size={15} />
+                    </button>
+                  </div>
+                )}
 
                 <div className="border-t border-outline-variant/30 px-5 py-4 space-y-3 bg-surface-container-low/30">
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -601,7 +829,8 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
           </div>
 
           <aside
-            className="lg:w-80 shrink-0 rounded-2xl border border-outline-variant/30 bg-surface-container-low/50 p-6 space-y-5 h-fit lg:sticky lg:top-28"
+            ref={asideRef}
+            className="lg:w-80 shrink-0 rounded-2xl border border-outline-variant/30 bg-surface-container-low/50 p-6 space-y-5 h-fit lg:sticky lg:top-28 scroll-mt-24"
             aria-live="polite"
           >
             {selectedRecipe ? (
