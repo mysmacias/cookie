@@ -60,7 +60,8 @@ export async function urlToScrapeId(url: string): Promise<string> {
 
 export function extractJsonLdBlocks(html: string): unknown[] {
   const results: unknown[] = [];
-  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  // Allow unquoted attribute values (e.g. Yoast emits `type=application/ld+json class=...`).
+  const re = /<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi;
   let match: RegExpExecArray | null;
   while ((match = re.exec(html)) !== null) {
     const raw = match[1].trim();
@@ -74,24 +75,40 @@ export function extractJsonLdBlocks(html: string): unknown[] {
   return results;
 }
 
-export function findSchemaRecipe(node: unknown): SchemaRecipe | null {
-  if (!node) return null;
+/** Collect every schema.org Recipe node anywhere in the tree. */
+export function collectSchemaRecipes(node: unknown, acc: SchemaRecipe[] = []): SchemaRecipe[] {
+  if (!node) return acc;
   if (Array.isArray(node)) {
-    for (const item of node) {
-      const found = findSchemaRecipe(item);
-      if (found) return found;
-    }
-    return null;
+    for (const item of node) collectSchemaRecipes(item, acc);
+    return acc;
   }
-  if (typeof node !== 'object') return null;
+  if (typeof node !== 'object') return acc;
   const obj = node as Record<string, unknown>;
   const type = obj['@type'];
   const types = Array.isArray(type) ? type : type ? [type] : [];
   if (types.some(t => String(t).toLowerCase() === 'recipe')) {
-    return obj as SchemaRecipe;
+    acc.push(obj as SchemaRecipe);
   }
-  if (obj['@graph']) return findSchemaRecipe(obj['@graph']);
-  return null;
+  if (obj['@graph']) collectSchemaRecipes(obj['@graph'], acc);
+  return acc;
+}
+
+/** A page can embed several recipes (related posts, roundups). Prefer the one
+ * with the most actual content — that's the page's primary recipe. */
+function schemaRecipeScore(recipe: SchemaRecipe): number {
+  const ingredients = Array.isArray(recipe.recipeIngredient) ? recipe.recipeIngredient.length : 0;
+  const instructions = Array.isArray(recipe.recipeInstructions)
+    ? recipe.recipeInstructions.length
+    : typeof recipe.recipeInstructions === 'string'
+      ? 1
+      : 0;
+  return ingredients + instructions;
+}
+
+export function findSchemaRecipe(node: unknown): SchemaRecipe | null {
+  const recipes = collectSchemaRecipes(node);
+  if (recipes.length === 0) return null;
+  return recipes.reduce((best, r) => (schemaRecipeScore(r) > schemaRecipeScore(best) ? r : best));
 }
 
 export function parseIsoDurationMinutes(iso?: string): number {
@@ -189,12 +206,13 @@ export async function fetchRecipePage(url: string): Promise<{ html: string; fina
 }
 
 export function extractSchemaRecipeFromHtml(html: string): SchemaRecipe | null {
-  const blocks = extractJsonLdBlocks(html);
-  for (const block of blocks) {
-    const recipe = findSchemaRecipe(block);
-    if (recipe?.name) return recipe;
+  const recipes: SchemaRecipe[] = [];
+  for (const block of extractJsonLdBlocks(html)) {
+    collectSchemaRecipes(block, recipes);
   }
-  return null;
+  const named = recipes.filter(r => r.name);
+  if (named.length === 0) return null;
+  return findSchemaRecipe(named);
 }
 
 export async function scrapeRecipeFromUrl(url: string): Promise<{ schema: SchemaRecipe; finalUrl: string }> {
