@@ -9,6 +9,7 @@ import {
   toggleBookmarkApi,
   clearUserDataCache,
   loadGuestData,
+  fetchCatalog,
 } from '../services/recipeApi';
 import {
   getAllRecipes as storeGetAll,
@@ -52,20 +53,23 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const refresh = useCallback(async () => {
+    // The shared catalog is public — load it for everyone (guests included).
+    const catalogReady = fetchCatalog();
     if (isGuest) {
       loadGuestData();
+      await catalogReady;
       syncFromCache();
       return;
     }
     if (!isAuthenticated) {
       clearUserDataCache();
-      setRecipes([]);
-      setBookmarkedIds([]);
+      await catalogReady;
+      syncFromCache();
       return;
     }
     setIsLoading(true);
     try {
-      await fetchUserData();
+      await Promise.all([fetchUserData(), catalogReady]);
       syncFromCache();
     } finally {
       setIsLoading(false);

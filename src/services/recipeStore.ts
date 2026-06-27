@@ -6,6 +6,7 @@ import { applyBundledRecipeMedia } from '../utils/applyBundledRecipeMedia';
 import { normalizeRecipeTaxonomy } from '../utils/recipeTaxonomy';
 import {
   getCachedBookmarks,
+  getCachedCatalog,
   getCachedOverrides,
   getCachedUserRecipes,
 } from './recipeApi';
@@ -15,11 +16,14 @@ export function getAllRecipes(): Recipe[] {
   const bundled = RECIPES.map(r => applyBundledRecipeMedia(overrides[r.id] ?? r));
   const seeded = [...RECIPE_API_SEED_RECIPES, ...MEALDB_SEED_RECIPES]
     .map(r => applyBundledRecipeMedia(overrides[r.id] ?? r));
+  // Shared catalog scraped from the web. Listed before user recipes so a user's
+  // own edits to a catalog recipe (same id) take precedence.
+  const catalog = getCachedCatalog().map(r => overrides[r.id] ?? r);
   const imported = getCachedUserRecipes().map(r =>
     r.id.startsWith('api_') ? applyBundledRecipeMedia(r) : r,
   );
   const recipesById = new Map<string, Recipe>();
-  for (const recipe of [...bundled, ...seeded, ...imported]) {
+  for (const recipe of [...bundled, ...seeded, ...catalog, ...imported]) {
     recipesById.set(recipe.id, recipe);
   }
   // Single place every recipe passes through: derive the cuisine facet and

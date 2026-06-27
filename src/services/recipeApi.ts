@@ -17,6 +17,10 @@ let userRecipes: Recipe[] = [];
 let overrides: Record<string, Recipe> = {};
 let bookmarks: string[] = [];
 
+// Global, shared recipe catalog (public; same for every visitor). Cached in
+// memory; the HTTP response is browser/edge-cached so reloads are cheap.
+let catalog: Recipe[] = [];
+
 // Guest mode keeps everything in localStorage (the same keys we later import
 // into a real account) instead of hitting the authenticated API.
 let guestMode = false;
@@ -53,6 +57,22 @@ export function getCachedOverrides(): Record<string, Recipe> {
 
 export function getCachedBookmarks(): string[] {
   return bookmarks;
+}
+
+export function getCachedCatalog(): Recipe[] {
+  return catalog;
+}
+
+// Fetch the shared catalog. Public endpoint, so this works for guests and
+// signed-in users alike. On failure the existing cache is left intact.
+export async function fetchCatalog(): Promise<Recipe[]> {
+  try {
+    const data = await apiFetch<{ recipes: Recipe[] }>('/api/recipes/catalog');
+    catalog = (data.recipes ?? []).filter(isRecipeShape);
+  } catch {
+    // keep whatever we already have
+  }
+  return catalog;
 }
 
 export function setUserDataCache(data: UserDataPayload): void {
