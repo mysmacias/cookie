@@ -312,38 +312,39 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
             <button
               type="button"
               onClick={onStartCooking}
+              title="Start step-by-step cooking mode"
               className="flex-1 min-w-[140px] bg-primary text-on-primary py-5 rounded-full font-label uppercase tracking-widest text-sm font-bold flex items-center justify-center space-x-3 hover:bg-primary-container transition-all shadow-lg shadow-primary/20"
             >
               <Play size={18} fill="currentColor" />
               <span>Start</span>
             </button>
-            <button type="button" onClick={() => void addToShoppingList()} className="flex items-center gap-2 px-4 py-5 rounded-full border border-outline-variant text-[10px] font-label uppercase tracking-widest hover:bg-surface-container">
+            <button type="button" onClick={() => void addToShoppingList()} title="Add this recipe's ingredients to your shopping list" className="flex items-center gap-2 px-4 py-5 rounded-full border border-outline-variant text-[10px] font-label uppercase tracking-widest hover:bg-surface-container">
               <ShoppingCart size={18} />
               <span className="hidden sm:inline">Shopping list</span>
             </button>
-            <button type="button" onClick={onFindSimilar} aria-label="Find similar recipes in graph" className="flex items-center gap-2 px-4 py-5 rounded-full border border-secondary/40 text-secondary text-[10px] font-label uppercase tracking-widest font-bold hover:bg-secondary/10">
+            <button type="button" onClick={onFindSimilar} aria-label="Find similar recipes in graph" title="Find similar recipes in graph" className="flex items-center gap-2 px-4 py-5 rounded-full border border-secondary/40 text-secondary text-[10px] font-label uppercase tracking-widest font-bold hover:bg-secondary/10">
               <Network size={18} />
             </button>
-            <button type="button" onClick={onEditRecipe} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container" aria-label="Edit recipe">
+            <button type="button" onClick={onEditRecipe} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container" aria-label="Edit recipe" title="Edit recipe">
               <Pencil size={20} />
             </button>
-            <button type="button" onClick={() => void handleDuplicate()} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container" aria-label="Duplicate recipe">
+            <button type="button" onClick={() => void handleDuplicate()} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container" aria-label="Duplicate recipe" title="Duplicate recipe">
               <Copy size={20} />
             </button>
-            <button type="button" onClick={handleToggleBookmark} className={`p-5 rounded-full border transition-colors ${bookmarked ? 'border-primary text-primary' : 'border-outline-variant hover:bg-surface-container'}`} aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark recipe'}>
+            <button type="button" onClick={handleToggleBookmark} className={`p-5 rounded-full border transition-colors ${bookmarked ? 'border-primary text-primary' : 'border-outline-variant hover:bg-surface-container'}`} aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark recipe'} title={bookmarked ? 'Remove bookmark' : 'Bookmark recipe'}>
               <Bookmark size={20} fill={bookmarked ? 'currentColor' : 'none'} />
             </button>
-            <button type="button" aria-label="Share recipe link" onClick={() => void shareRecipe()} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
+            <button type="button" aria-label="Share recipe link" title="Share recipe link" onClick={() => void shareRecipe()} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
               <Share2 size={20} />
             </button>
-            <button type="button" aria-label="Export recipe" onClick={() => setExportOpen(true)} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
+            <button type="button" aria-label="Export recipe" title="Print or export recipe" onClick={() => setExportOpen(true)} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
               <Printer size={20} />
             </button>
-            <button type="button" aria-label="Delete recipe" onClick={() => setConfirmDelete(true)} className="p-5 rounded-full border border-secondary/30 text-secondary hover:bg-secondary/10">
+            <button type="button" aria-label="Delete recipe" title="Delete recipe" onClick={() => setConfirmDelete(true)} className="p-5 rounded-full border border-secondary/30 text-secondary hover:bg-secondary/10">
               <Trash2 size={20} />
             </button>
             <div className="relative">
-              <button type="button" aria-label="Add to collection" aria-expanded={showCollections} onClick={() => setShowCollections(v => !v)} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
+              <button type="button" aria-label="Add to collection" title="Add to collection" aria-expanded={showCollections} onClick={() => setShowCollections(v => !v)} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
                 <List size={20} />
               </button>
               {showCollections && collections.length > 0 && (
