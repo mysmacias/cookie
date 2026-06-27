@@ -35,7 +35,6 @@ const SVG_SIZE = 640;
 const MIN_NODE_RADIUS = 16;
 const MAX_NODE_RADIUS = 42;
 const DEFAULT_THRESHOLD = 0.25;
-const TOTAL_ITERATIONS = 240;
 
 /** Region color helpers: derive fill/stroke from a region's hue. */
 function regionFill(region: RegionInfo, emphasis = false): string {
@@ -87,129 +86,179 @@ function parseFocusFromUrl(): string | null {
 interface ForceSimulation {
   /** Live positions, mutated in place each tick. */
   positions: Map<string, NodePosition>;
-  /** Advance the simulation by one iteration. No-op once finished. */
+  /** Advance the simulation by one frame. No-op once cooled. */
   tick: () => void;
-  /** True once all iterations have run. */
+  /** True once the simulation has cooled to rest. */
   done: boolean;
 }
 
+/** Internal node carries velocity for the Verlet-style integrator. */
+interface SimNode extends NodePosition {
+  vx: number;
+  vy: number;
+}
+
+// Velocity-based simulation constants, tuned to read like Obsidian's graph:
+// nodes bloom out from the centre and ease into a stable web. One `tick()` is
+// meant to run per animation frame so the motion is continuous, not jumpy.
+const ALPHA_DECAY = 0.045; // how fast the system cools (~150 frames to rest)
+const ALPHA_MIN = 0.006;
+const VELOCITY_RETAIN = 0.62; // friction: velocity kept between frames
+const LINK_STRENGTH = 0.45;
+const GRAVITY = 0.055; // centring pull that packs the graph into a filled cloud
+
 /**
- * Build a steppable force-directed layout. Seeding happens up front (so nodes
- * can be painted immediately) while the expensive relaxation is exposed as
- * discrete `tick()`s — the screen drives these across animation frames so the
- * graph settles in without blocking the main thread on mount.
+ * Build a steppable, velocity-based force layout. Seeding happens up front (so
+ * nodes can be painted immediately) and each `tick()` advances the physics by
+ * one frame: charge repulsion, link springs, gentle gravity, and collision
+ * resolution, all scaled by a cooling `alpha`. The screen drives one tick per
+ * animation frame, so the graph eases into place smoothly without blocking the
+ * main thread on mount.
  */
 function createForceSimulation(
   nodeIds: string[],
   edges: GraphEdge[],
   focusId: string | null,
   radiusOf: (id: string) => number,
-  iterations = TOTAL_ITERATIONS,
   seed?: Map<string, NodePosition>,
 ): ForceSimulation {
   const positions = new Map<string, NodePosition>();
   const center = SVG_SIZE / 2;
   const n = Math.max(nodeIds.length, 1);
-
-  // Spread the initial ring wider for bigger graphs so nodes don't start piled
-  // on top of each other (which the solver struggles to untangle).
-  const spread = Math.min(SVG_SIZE * 0.46, SVG_SIZE * (0.22 + n * 0.006));
+  const nodes: SimNode[] = [];
 
   nodeIds.forEach((id, i) => {
     // Reuse a node's previous position when we have one so filter/focus changes
-    // glide from where things were instead of re-scrambling from scratch. New
-    // nodes drop onto a golden-angle spiral that fills the disk evenly.
+    // glide from where things were. New nodes start in a tight cluster near the
+    // centre with a little jitter, then bloom outward as the charge kicks in.
     const prev = seed?.get(id);
-    const t = (i + 0.5) / n;
     const angle = i * 2.399963229728653;
-    const rad = spread * Math.sqrt(t);
-    positions.set(id, {
+    const rad = 16 + (i % 9) * 5;
+    const node: SimNode = {
       id,
-      x: focusId === id ? center : prev?.x ?? center + rad * Math.cos(angle),
-      y: focusId === id ? center : prev?.y ?? center + rad * Math.sin(angle),
-    });
+      x: focusId === id ? center : prev?.x ?? center + Math.cos(angle) * rad,
+      y: focusId === id ? center : prev?.y ?? center + Math.sin(angle) * rad,
+      vx: 0,
+      vy: 0,
+    };
+    nodes.push(node);
+    positions.set(id, node);
   });
 
-  // Scale repulsion with node count so dense graphs push apart enough to read.
-  const repulseK = 6000 + n * 120;
-  // Gravity weakens as the graph grows, letting it use the whole canvas.
-  const gravity = Math.max(0.006, 0.02 - n * 0.0002);
+  // Modest charge gives nodes breathing room without overpowering gravity (too
+  // strong and every node flees to the boundary, leaving a hollow ring). Most
+  // of the spacing comes from collision resolution below; gravity then packs
+  // the result into a filled, centred cloud.
+  const charge = -(120 + n * 3);
 
-  let iter = 0;
+  let alpha = 1;
   const sim: ForceSimulation = {
     positions,
     done: nodeIds.length === 0,
     tick() {
-      if (iter >= iterations) {
+      if (alpha < ALPHA_MIN) {
         sim.done = true;
         return;
       }
-      const cooling = 1 - iter / iterations;
+      alpha += (0 - alpha) * ALPHA_DECAY;
 
-      for (let i = 0; i < nodeIds.length; i++) {
-        for (let j = i + 1; j < nodeIds.length; j++) {
-          const a = positions.get(nodeIds[i])!;
-          const b = positions.get(nodeIds[j])!;
+      // Charge: every pair repels with an inverse-square falloff.
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i];
+          const b = nodes[j];
           let dx = b.x - a.x;
           let dy = b.y - a.y;
-          // Keep nodes apart relative to their combined radii so big (slow-cook)
-          // circles never overlap their neighbors.
-          const minGap = radiusOf(nodeIds[i]) + radiusOf(nodeIds[j]) + 22;
-          const dist = Math.max(Math.hypot(dx, dy), 0.5);
-          const overlap = dist < minGap ? (minGap - dist) * 0.5 : 0;
-          const repulse = repulseK / (dist * dist) + overlap;
-          dx = (dx / dist) * repulse;
-          dy = (dy / dist) * repulse;
-          if (nodeIds[i] !== focusId) {
-            a.x -= dx;
-            a.y -= dy;
+          let l = dx * dx + dy * dy;
+          if (l < 0.01) {
+            dx = (Math.random() - 0.5) * 0.5;
+            dy = (Math.random() - 0.5) * 0.5;
+            l = dx * dx + dy * dy;
           }
-          if (nodeIds[j] !== focusId) {
-            b.x += dx;
-            b.y += dy;
-          }
+          const w = (charge * alpha) / l;
+          a.vx += dx * w;
+          a.vy += dy * w;
+          b.vx -= dx * w;
+          b.vy -= dy * w;
         }
       }
 
+      // Link springs pull connected recipes toward an ideal separation.
       for (const edge of edges) {
-        const a = positions.get(edge.source);
-        const b = positions.get(edge.target);
+        const a = positions.get(edge.source) as SimNode | undefined;
+        const b = positions.get(edge.target) as SimNode | undefined;
         if (!a || !b) continue;
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        const dist = Math.max(Math.hypot(dx, dy), 1);
-        const ideal = radiusOf(edge.source) + radiusOf(edge.target) + 70;
-        const attract = (dist - ideal) * 0.05 * edge.weight;
-        dx = (dx / dist) * attract;
-        dy = (dy / dist) * attract;
-        if (edge.source !== focusId) {
-          a.x += dx;
-          a.y += dy;
-        }
-        if (edge.target !== focusId) {
-          b.x -= dx;
-          b.y -= dy;
-        }
+        let dx = b.x + b.vx - (a.x + a.vx);
+        let dy = b.y + b.vy - (a.y + a.vy);
+        const dist = Math.hypot(dx, dy) || 1;
+        const ideal = radiusOf(edge.source) + radiusOf(edge.target) + 48;
+        const k = ((dist - ideal) / dist) * alpha * LINK_STRENGTH * edge.weight;
+        dx *= k;
+        dy *= k;
+        b.vx -= dx * 0.5;
+        b.vy -= dy * 0.5;
+        a.vx += dx * 0.5;
+        a.vy += dy * 0.5;
       }
 
-      for (const id of nodeIds) {
-        const p = positions.get(id)!;
-        if (id === focusId) {
-          p.x = center;
-          p.y = center;
+      // Gravity toward centre keeps the web from drifting off-canvas.
+      for (const node of nodes) {
+        if (node.id === focusId) continue;
+        node.vx += (center - node.x) * GRAVITY * alpha;
+        node.vy += (center - node.y) * GRAVITY * alpha;
+      }
+
+      // Integrate velocity with friction.
+      for (const node of nodes) {
+        if (node.id === focusId) {
+          node.x = center;
+          node.y = center;
+          node.vx = 0;
+          node.vy = 0;
           continue;
         }
-        // Gentle pull toward center keeps the graph from drifting off-canvas
-        // without crushing it into a ball.
-        p.x += (center - p.x) * gravity * cooling;
-        p.y += (center - p.y) * gravity * cooling;
-        const margin = radiusOf(id) + 14;
-        p.x = Math.min(SVG_SIZE - margin, Math.max(margin, p.x));
-        p.y = Math.min(SVG_SIZE - margin, Math.max(margin, p.y));
+        node.vx *= VELOCITY_RETAIN;
+        node.vy *= VELOCITY_RETAIN;
+        node.x += node.vx;
+        node.y += node.vy;
       }
 
-      iter++;
-      if (iter >= iterations) sim.done = true;
+      // Collision: nudge overlapping circles apart so big (slow-cook) nodes
+      // never sit on top of their neighbours.
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = nodes[i];
+            const b = nodes[j];
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            const dist = Math.hypot(dx, dy) || 0.01;
+            const minGap = radiusOf(a.id) + radiusOf(b.id) + 14;
+            if (dist < minGap) {
+              const shift = ((minGap - dist) / dist) * 0.5;
+              dx *= shift;
+              dy *= shift;
+              if (a.id !== focusId) {
+                a.x -= dx;
+                a.y -= dy;
+              }
+              if (b.id !== focusId) {
+                b.x += dx;
+                b.y += dy;
+              }
+            }
+          }
+        }
+      }
+
+      // Keep everything inside the canvas.
+      for (const node of nodes) {
+        const margin = radiusOf(node.id) + 12;
+        node.x = Math.min(SVG_SIZE - margin, Math.max(margin, node.x));
+        node.y = Math.min(SVG_SIZE - margin, Math.max(margin, node.y));
+      }
+
+      if (alpha < ALPHA_MIN) sim.done = true;
     },
   };
 
@@ -301,7 +350,6 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
       graph.edges,
       activeFocusId,
       radiusOf,
-      TOTAL_ITERATIONS,
       positionsRef.current,
     );
 
@@ -313,22 +361,20 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
     // Reduced motion: solve in one deferred pass (still off the first paint, so
     // entry stays snappy) and drop the node-by-node settling animation.
     if (reduceMotion) {
-      while (!sim.done) sim.tick();
+      let guard = 0;
+      while (!sim.done && guard++ < 1000) sim.tick();
       commit();
       setIsSettling(false);
       return;
     }
 
-    // Paint the seeded layout immediately, then relax it over frames.
+    // Paint the seeded (clustered) layout immediately, then advance the physics
+    // one frame per tick so the graph blooms outward and eases into place.
     commit();
     setIsSettling(true);
 
-    // Fewer iterations per frame for larger graphs keeps each frame cheap so
-    // the page stays responsive while the layout converges.
-    const perFrame = Math.max(3, Math.round(30 - ids.length / 8));
-
     const step = () => {
-      for (let k = 0; k < perFrame && !sim.done; k++) sim.tick();
+      sim.tick();
       commit();
       if (sim.done) {
         setIsSettling(false);
