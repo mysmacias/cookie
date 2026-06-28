@@ -557,7 +557,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
               </div>
             ) : (
               <div className="rounded-2xl border border-outline-variant/30 bg-surface overflow-hidden">
-                <div ref={wrapRef} className="relative w-full" style={{ height: size.h || 520 }} aria-label="Recipe similarity graph" role="img">
+                <div ref={wrapRef} className="relative w-full" style={{ height: size.h || 520 }} aria-label="Recipe similarity graph" role="group">
                   {size.w > 0 && mountGraph && (
                     <ForceGraph2D
                       ref={((el: any) => {
