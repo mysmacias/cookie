@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useNavigation, Screen, isResetPasswordRoute } from './hooks/useNavigation';
 import { useAuth } from './context/AuthContext';
@@ -16,7 +16,11 @@ import { DiscoverRecipesScreen } from './screens/DiscoverRecipesScreen';
 import { ShoppingListScreen } from './screens/ShoppingListScreen';
 import { CollectionsScreen } from './screens/CollectionsScreen';
 import { CollectionDetailScreen } from './screens/CollectionDetailScreen';
-import { RecipeGraphScreen } from './screens/RecipeGraphScreen';
+// Code-split the graph screen: it pulls in the force-graph/d3 libraries, which
+// shouldn't weigh down the initial bundle for users who never open the graph.
+const RecipeGraphScreen = lazy(() =>
+  import('./screens/RecipeGraphScreen').then(m => ({ default: m.RecipeGraphScreen })),
+);
 import { CookPlanScreen } from './screens/CookPlanScreen';
 import { CookPlanModeScreen } from './screens/CookPlanModeScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -274,12 +278,21 @@ export default function App() {
           )}
 
           {currentScreen === 'graph' && (
-            <RecipeGraphScreen
-              navigateTo={navigateTo}
-              startCooking={startCooking}
-              focusRecipeId={graphFocusId}
-              onCookTogether={ids => navigateToCookPlan(ids)}
-            />
+            <Suspense
+              fallback={
+                <div className="flex flex-col items-center justify-center gap-3 py-32">
+                  <span className="inline-block w-6 h-6 rounded-full border-2 border-outline-variant border-t-primary animate-spin" aria-hidden />
+                  <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">Loading graph…</p>
+                </div>
+              }
+            >
+              <RecipeGraphScreen
+                navigateTo={navigateTo}
+                startCooking={startCooking}
+                focusRecipeId={graphFocusId}
+                onCookTogether={ids => navigateToCookPlan(ids)}
+              />
+            </Suspense>
           )}
 
           {currentScreen === 'cook-plan' && (

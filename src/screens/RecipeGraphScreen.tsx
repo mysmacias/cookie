@@ -1,6 +1,8 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, Play, ExternalLink, Network, ChefHat, Clock, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import ForceGraph2D from 'react-force-graph-2d';
+import { forceCollide, forceX, forceY } from 'd3-force';
 import { Screen } from '../hooks/useNavigation';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { useRecipes } from '../context/RecipeContext';
@@ -13,7 +15,6 @@ import {
   getRegionLegend,
   getSimilarRecipes,
   parseRecipeTimeMinutes,
-  type GraphEdge,
   type RegionInfo,
   type SimilarityBreakdown,
 } from '../utils/recipeSimilarity';
@@ -25,17 +26,31 @@ interface RecipeGraphScreenProps {
   onCookTogether?: (recipeIds: string[]) => void;
 }
 
-interface NodePosition {
+/** A node as consumed by the force graph; the simulation mutates x/y/vx/vy/fx/fy. */
+interface GraphDatum {
   id: string;
-  x: number;
-  y: number;
+  recipe: Recipe;
+  region: RegionInfo;
+  r: number;
+  minutes: number | null;
+  title: string;
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+  fx?: number;
+  fy?: number;
 }
 
-const SVG_SIZE = 640;
-const MIN_NODE_RADIUS = 16;
-const MAX_NODE_RADIUS = 42;
+interface LinkDatum {
+  source: string | GraphDatum;
+  target: string | GraphDatum;
+  weight: number;
+}
+
+const MIN_NODE_RADIUS = 7;
+const MAX_NODE_RADIUS = 22;
 const DEFAULT_THRESHOLD = 0.25;
-const TOTAL_ITERATIONS = 240;
 
 /** Region color helpers: derive fill/stroke from a region's hue. */
 function regionFill(region: RegionInfo, emphasis = false): string {
@@ -78,146 +93,43 @@ function formatMinutes(minutes: number | null): string {
   return mins === 0 ? `${hrs} hr` : `${hrs} hr ${mins} min`;
 }
 
+function shortTime(minutes: number | null): string {
+  return formatMinutes(minutes).replace(' min', 'm').replace(' hr', 'h').replace('Time unknown', '?');
+}
+
 function parseFocusFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search);
   const focus = params.get('focus');
   return focus?.trim() || null;
 }
 
-interface ForceSimulation {
-  /** Live positions, mutated in place each tick. */
-  positions: Map<string, NodePosition>;
-  /** Advance the simulation by one iteration. No-op once finished. */
-  tick: () => void;
-  /** True once all iterations have run. */
-  done: boolean;
-}
-
-/**
- * Build a steppable force-directed layout. Seeding happens up front (so nodes
- * can be painted immediately) while the expensive relaxation is exposed as
- * discrete `tick()`s — the screen drives these across animation frames so the
- * graph settles in without blocking the main thread on mount.
- */
-function createForceSimulation(
-  nodeIds: string[],
-  edges: GraphEdge[],
-  focusId: string | null,
-  radiusOf: (id: string) => number,
-  iterations = TOTAL_ITERATIONS,
-  seed?: Map<string, NodePosition>,
-): ForceSimulation {
-  const positions = new Map<string, NodePosition>();
-  const center = SVG_SIZE / 2;
-  const n = Math.max(nodeIds.length, 1);
-
-  // Spread the initial ring wider for bigger graphs so nodes don't start piled
-  // on top of each other (which the solver struggles to untangle).
-  const spread = Math.min(SVG_SIZE * 0.46, SVG_SIZE * (0.22 + n * 0.006));
-
-  nodeIds.forEach((id, i) => {
-    // Reuse a node's previous position when we have one so filter/focus changes
-    // glide from where things were instead of re-scrambling from scratch. New
-    // nodes drop onto a golden-angle spiral that fills the disk evenly.
-    const prev = seed?.get(id);
-    const t = (i + 0.5) / n;
-    const angle = i * 2.399963229728653;
-    const rad = spread * Math.sqrt(t);
-    positions.set(id, {
-      id,
-      x: focusId === id ? center : prev?.x ?? center + rad * Math.cos(angle),
-      y: focusId === id ? center : prev?.y ?? center + rad * Math.sin(angle),
-    });
-  });
-
-  // Scale repulsion with node count so dense graphs push apart enough to read.
-  const repulseK = 6000 + n * 120;
-  // Gravity weakens as the graph grows, letting it use the whole canvas.
-  const gravity = Math.max(0.006, 0.02 - n * 0.0002);
-
-  let iter = 0;
-  const sim: ForceSimulation = {
-    positions,
-    done: nodeIds.length === 0,
-    tick() {
-      if (iter >= iterations) {
-        sim.done = true;
-        return;
-      }
-      const cooling = 1 - iter / iterations;
-
-      for (let i = 0; i < nodeIds.length; i++) {
-        for (let j = i + 1; j < nodeIds.length; j++) {
-          const a = positions.get(nodeIds[i])!;
-          const b = positions.get(nodeIds[j])!;
-          let dx = b.x - a.x;
-          let dy = b.y - a.y;
-          // Keep nodes apart relative to their combined radii so big (slow-cook)
-          // circles never overlap their neighbors.
-          const minGap = radiusOf(nodeIds[i]) + radiusOf(nodeIds[j]) + 22;
-          const dist = Math.max(Math.hypot(dx, dy), 0.5);
-          const overlap = dist < minGap ? (minGap - dist) * 0.5 : 0;
-          const repulse = repulseK / (dist * dist) + overlap;
-          dx = (dx / dist) * repulse;
-          dy = (dy / dist) * repulse;
-          if (nodeIds[i] !== focusId) {
-            a.x -= dx;
-            a.y -= dy;
-          }
-          if (nodeIds[j] !== focusId) {
-            b.x += dx;
-            b.y += dy;
-          }
-        }
-      }
-
-      for (const edge of edges) {
-        const a = positions.get(edge.source);
-        const b = positions.get(edge.target);
-        if (!a || !b) continue;
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        const dist = Math.max(Math.hypot(dx, dy), 1);
-        const ideal = radiusOf(edge.source) + radiusOf(edge.target) + 70;
-        const attract = (dist - ideal) * 0.05 * edge.weight;
-        dx = (dx / dist) * attract;
-        dy = (dy / dist) * attract;
-        if (edge.source !== focusId) {
-          a.x += dx;
-          a.y += dy;
-        }
-        if (edge.target !== focusId) {
-          b.x -= dx;
-          b.y -= dy;
-        }
-      }
-
-      for (const id of nodeIds) {
-        const p = positions.get(id)!;
-        if (id === focusId) {
-          p.x = center;
-          p.y = center;
-          continue;
-        }
-        // Gentle pull toward center keeps the graph from drifting off-canvas
-        // without crushing it into a ball.
-        p.x += (center - p.x) * gravity * cooling;
-        p.y += (center - p.y) * gravity * cooling;
-        const margin = radiusOf(id) + 14;
-        p.x = Math.min(SVG_SIZE - margin, Math.max(margin, p.x));
-        p.y = Math.min(SVG_SIZE - margin, Math.max(margin, p.y));
-      }
-
-      iter++;
-      if (iter >= iterations) sim.done = true;
-    },
-  };
-
-  return sim;
-}
-
 function formatPercent(score: number): string {
   return `${Math.round(score * 100)}%`;
+}
+
+/** Read a few theme colors off the DOM so canvas painting matches the CSS tokens. */
+function readThemeColors(): { onSurface: string; surfaceHigh: string; primary: string } {
+  if (typeof document === 'undefined') {
+    return { onSurface: '#e7e2d9', surfaceHigh: '#2a2a28', primary: '#7c9a78' };
+  }
+  const probe = (cls: string, prop: 'color' | 'backgroundColor') => {
+    const el = document.createElement('span');
+    el.className = cls;
+    el.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:0;height:0';
+    document.body.appendChild(el);
+    const value = getComputedStyle(el)[prop];
+    el.remove();
+    return value;
+  };
+  return {
+    onSurface: probe('text-on-surface', 'color'),
+    surfaceHigh: probe('bg-surface-container-high', 'backgroundColor'),
+    primary: probe('text-primary', 'color'),
+  };
+}
+
+function idOf(end: string | GraphDatum): string {
+  return typeof end === 'object' ? end.id : end;
 }
 
 export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
@@ -248,19 +160,12 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
   const activeFocusId = focusId && graph.nodes.some(n => n.id === focusId) ? focusId : null;
 
   const nodeTimes = useMemo(
-    () =>
-      graph.nodes.map(n => ({
-        id: n.id,
-        minutes: parseRecipeTimeMinutes(n.recipe.time),
-      })),
+    () => graph.nodes.map(n => ({ id: n.id, minutes: parseRecipeTimeMinutes(n.recipe.time) })),
     [graph.nodes],
   );
 
   const radiusMap = useMemo(() => buildRadiusMap(nodeTimes), [nodeTimes]);
-  const radiusOf = useCallback(
-    (id: string) => radiusMap.get(id) ?? MIN_NODE_RADIUS,
-    [radiusMap],
-  );
+  const radiusOf = useCallback((id: string) => radiusMap.get(id) ?? MIN_NODE_RADIUS, [radiusMap]);
 
   const minutesById = useMemo(() => {
     const m = new Map<string, number | null>();
@@ -268,138 +173,242 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
     return m;
   }, [nodeTimes]);
 
-  const regionLegend = useMemo(
-    () => getRegionLegend(graph.nodes.map(n => n.recipe)),
-    [graph.nodes],
+  const regionLegend = useMemo(() => getRegionLegend(graph.nodes.map(n => n.recipe)), [graph.nodes]);
+
+  // Whether the graph canvas is mounted (vs the empty/loading state).
+  const showGraph = graph.nodes.length > 0;
+
+  // ---- Force graph plumbing --------------------------------------------
+  const fgRef = useRef<any>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const [fgReady, setFgReady] = useState(false);
+  // Defer mounting the (heavy) canvas a beat so the page's enter animation can
+  // play smoothly first — mounting the force graph immediately saturates the
+  // main thread and janks the transition.
+  const [mountGraph, setMountGraph] = useState(false);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [themeColors, setThemeColors] = useState(() => ({ onSurface: '#e7e2d9', surfaceHigh: '#2a2a28', primary: '#7c9a78' }));
+  const didFitRef = useRef(false);
+
+  const reduceMotion = useMemo(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+    [],
   );
 
-  // Positions are computed progressively (see effect below) rather than in
-  // render, so navigating to this screen paints instantly and the graph
-  // settles in afterward instead of blocking the main thread on mount.
-  const [positions, setPositions] = useState<Map<string, NodePosition>>(new Map());
-  const [isSettling, setIsSettling] = useState(true);
-  const rafRef = useRef<number | null>(null);
-  // Mirror of the latest positions so a re-layout can seed from where nodes
-  // currently are (continuity) without making `positions` an effect dependency.
-  const positionsRef = useRef<Map<string, NodePosition>>(new Map());
+  useEffect(() => setThemeColors(readThemeColors()), []);
 
   useEffect(() => {
-    const ids = graph.nodes.map(n => n.id);
-    if (ids.length === 0) {
-      positionsRef.current = new Map();
-      setPositions(positionsRef.current);
-      setIsSettling(false);
-      return;
-    }
-
-    const reduceMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
-    const sim = createForceSimulation(
-      ids,
-      graph.edges,
-      activeFocusId,
-      radiusOf,
-      TOTAL_ITERATIONS,
-      positionsRef.current,
-    );
-
-    const commit = () => {
-      positionsRef.current = new Map(sim.positions);
-      setPositions(positionsRef.current);
-    };
-
-    // Reduced motion: solve in one deferred pass (still off the first paint, so
-    // entry stays snappy) and drop the node-by-node settling animation.
-    if (reduceMotion) {
-      while (!sim.done) sim.tick();
-      commit();
-      setIsSettling(false);
-      return;
-    }
-
-    // Paint the seeded layout immediately, then relax it over frames.
-    commit();
-    setIsSettling(true);
-
-    // Fewer iterations per frame for larger graphs keeps each frame cheap so
-    // the page stays responsive while the layout converges.
-    const perFrame = Math.max(3, Math.round(30 - ids.length / 8));
-
-    const step = () => {
-      for (let k = 0; k < perFrame && !sim.done; k++) sim.tick();
-      commit();
-      if (sim.done) {
-        setIsSettling(false);
-        rafRef.current = null;
-      } else {
-        rafRef.current = requestAnimationFrame(step);
-      }
-    };
-
-    rafRef.current = requestAnimationFrame(step);
-
-    return () => {
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    };
-  }, [graph.nodes, graph.edges, activeFocusId, radiusOf]);
-
-  const hasLayout = positions.size > 0;
-
-  // ---- Pan & zoom -------------------------------------------------------
-  // A single transform on the content group lets the user explore dense graphs
-  // without re-running the layout. Panning is driven by pointer drags on the
-  // canvas background (nodes stop propagation so taps still select).
-  const svgRef = useRef<SVGSVGElement | null>(null);
-  const asideRef = useRef<HTMLElement | null>(null);
-  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
-  const panRef = useRef({ active: false, lastX: 0, lastY: 0 });
-
-  // Recenter when the graph's subject changes; keep zoom across threshold drags.
-  useEffect(() => {
-    setView({ scale: 1, x: 0, y: 0 });
-  }, [activeFocusId, categoryFilter]);
-
-  const zoomBy = useCallback((factor: number) => {
-    setView(v => {
-      const scale = Math.min(4, Math.max(0.6, v.scale * factor));
-      // Keep the canvas center fixed while scaling.
-      const c = SVG_SIZE / 2;
-      return { scale, x: v.x + (v.scale - scale) * c, y: v.y + (v.scale - scale) * c };
-    });
+    const id = window.setTimeout(() => setMountGraph(true), 450);
+    return () => window.clearTimeout(id);
   }, []);
 
-  const resetView = useCallback(() => setView({ scale: 1, x: 0, y: 0 }), []);
+  // Track the canvas container size; the force graph needs explicit pixel dims.
+  // Re-runs when the graph first becomes visible (the container isn't in the DOM
+  // while recipes are still loading), otherwise size would stay 0 forever.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const compute = () => {
+      // Fall back to the parent width / a sane default if measurement is 0 so the
+      // canvas still mounts; the observer corrects it once a real width is known.
+      const w = Math.round(el.clientWidth || el.parentElement?.clientWidth || 640);
+      const vh = window.innerHeight || 800;
+      const h = Math.round(Math.min(660, Math.max(440, vh * 0.66)));
+      setSize(prev => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    window.addEventListener('resize', compute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', compute);
+    };
+  }, [showGraph]);
 
-  const beginPan = (e: React.PointerEvent<SVGSVGElement>) => {
-    // On touch, only hijack the gesture once zoomed in so the page can still
-    // scroll past the graph at the default zoom.
-    if (e.pointerType === 'touch' && view.scale <= 1) return;
-    panRef.current = { active: true, lastX: e.clientX, lastY: e.clientY };
-    svgRef.current?.setPointerCapture?.(e.pointerId);
-  };
+  // Keep node object identity stable across rebuilds so positions persist
+  // (continuity) when the threshold/filter changes — only data fields refresh.
+  const nodeCacheRef = useRef<Map<string, GraphDatum>>(new Map());
+  const graphData = useMemo(() => {
+    const cache = nodeCacheRef.current;
+    const liveIds = new Set(graph.nodes.map(n => n.id));
+    for (const id of [...cache.keys()]) if (!liveIds.has(id)) cache.delete(id);
+    const nodes = graph.nodes.map(n => {
+      const datum = cache.get(n.id) ?? ({ id: n.id } as GraphDatum);
+      datum.recipe = n.recipe;
+      datum.region = getRecipeRegion(n.recipe);
+      datum.r = radiusOf(n.id);
+      datum.minutes = minutesById.get(n.id) ?? null;
+      datum.title = n.recipe.title;
+      cache.set(n.id, datum);
+      return datum;
+    });
+    const links: LinkDatum[] = graph.edges.map(e => ({ source: e.source, target: e.target, weight: e.weight }));
+    return { nodes, links };
+  }, [graph, radiusOf, minutesById]);
 
-  const movePan = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!panRef.current.active) return;
-    const rect = svgRef.current?.getBoundingClientRect();
-    const ratio = rect && rect.width ? SVG_SIZE / rect.width : 1;
-    const dx = (e.clientX - panRef.current.lastX) * ratio;
-    const dy = (e.clientY - panRef.current.lastY) * ratio;
-    panRef.current.lastX = e.clientX;
-    panRef.current.lastY = e.clientY;
-    setView(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
-  };
+  // Adjacency for hover/selection highlighting.
+  const adjacency = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    graph.edges.forEach(e => {
+      (m.get(e.source) ?? m.set(e.source, new Set()).get(e.source)!).add(e.target);
+      (m.get(e.target) ?? m.set(e.target, new Set()).get(e.target)!).add(e.source);
+    });
+    return m;
+  }, [graph.edges]);
 
-  const endPan = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!panRef.current.active) return;
-    panRef.current.active = false;
-    svgRef.current?.releasePointerCapture?.(e.pointerId);
-  };
+  const highlightId = hoverId ?? selectedId ?? activeFocusId;
+  const highlightNodes = useMemo(() => {
+    const s = new Set<string>();
+    if (highlightId) {
+      s.add(highlightId);
+      adjacency.get(highlightId)?.forEach(id => s.add(id));
+    }
+    return s;
+  }, [highlightId, adjacency]);
+  const anyActive = Boolean(highlightId);
 
-  const isZoomed = view.scale !== 1 || view.x !== 0 || view.y !== 0;
+  // Configure d3 forces once the instance exists and whenever the graph changes.
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+    fg.d3Force('charge')?.strength(-180).distanceMax(420);
+    const link = fg.d3Force('link');
+    if (link) {
+      link
+        .distance((l: LinkDatum) => radiusOf(idOf(l.source)) + radiusOf(idOf(l.target)) + 42)
+        .strength((l: LinkDatum) => 0.06 + l.weight * 0.28);
+    }
+    fg.d3Force('collide', forceCollide((n: GraphDatum) => (n.r ?? MIN_NODE_RADIUS) + 3).strength(0.95).iterations(3));
+    // Gentle pull toward the centre on every node. forceCenter alone only shifts
+    // the centroid — it applies no attraction — so weakly-connected nodes drift
+    // outward and pile against the edges, leaving the middle empty. forceX/forceY
+    // draw nodes inward so the graph fills as a compact, centred cloud.
+    fg.d3Force('x', forceX(0).strength(0.07));
+    fg.d3Force('y', forceY(0).strength(0.07));
+    fg.d3ReheatSimulation?.();
+  }, [fgReady, graphData, radiusOf]);
 
+  // Frame the graph once it first settles.
+  const handleEngineStop = useCallback(() => {
+    if (didFitRef.current) return;
+    didFitRef.current = true;
+    fgRef.current?.zoomToFit(600, 48);
+  }, []);
+
+  // When focusing a recipe, glide the camera to it.
+  useEffect(() => {
+    if (!activeFocusId) return;
+    const fg = fgRef.current;
+    if (!fg) return;
+    const target = graphData.nodes.find(n => n.id === activeFocusId);
+    if (target && target.x != null && target.y != null) {
+      fg.centerAt(target.x, target.y, 700);
+      fg.zoom(2.2, 700);
+    }
+  }, [activeFocusId, graphData, fgReady]);
+
+  // ---- Canvas painting --------------------------------------------------
+  const paintNode = useCallback(
+    (node: GraphDatum, c2d: CanvasRenderingContext2D, scale: number) => {
+      const r = node.r ?? MIN_NODE_RADIUS;
+      const region = node.region;
+      const isActive = node.id === selectedId || node.id === activeFocusId;
+      const isHover = node.id === hoverId;
+      const dim = anyActive && !highlightNodes.has(node.id);
+      const x = node.x ?? 0;
+      const y = node.y ?? 0;
+
+      c2d.save();
+      c2d.globalAlpha = dim ? 0.28 : 1;
+
+      if (isActive || isHover) {
+        c2d.beginPath();
+        c2d.arc(x, y, r + 4, 0, 2 * Math.PI);
+        c2d.strokeStyle = regionFill(region, true);
+        c2d.globalAlpha = 0.5;
+        c2d.lineWidth = 2;
+        c2d.stroke();
+        c2d.globalAlpha = 1;
+      }
+
+      c2d.beginPath();
+      c2d.arc(x, y, r, 0, 2 * Math.PI);
+      c2d.fillStyle = regionFill(region, isActive);
+      c2d.fill();
+      c2d.lineWidth = isActive ? 2.5 : 1.2;
+      c2d.strokeStyle = isActive ? '#ffffff' : regionStroke(region);
+      c2d.stroke();
+
+      // Cook-time label inside the node, scaling with the node, when legible.
+      if (r * scale > 11) {
+        const fs = Math.max(4, Math.min(11, r / 1.7));
+        c2d.font = `700 ${fs}px "Work Sans", system-ui, sans-serif`;
+        c2d.textAlign = 'center';
+        c2d.textBaseline = 'middle';
+        c2d.fillStyle = '#ffffff';
+        c2d.fillText(shortTime(node.minutes), x, y);
+      }
+
+      // Title label below, constant screen size, on hover/active or when zoomed in.
+      if (isHover || isActive || scale > 2.4) {
+        const label = node.title.length > 26 ? `${node.title.slice(0, 24)}…` : node.title;
+        const fs = 12 / scale;
+        c2d.font = `600 ${fs}px "Work Sans", system-ui, sans-serif`;
+        c2d.textAlign = 'center';
+        c2d.textBaseline = 'top';
+        const padX = 5 / scale;
+        const padY = 3 / scale;
+        const tw = c2d.measureText(label).width;
+        const bx = x - tw / 2 - padX;
+        const by = y + r + 3 / scale;
+        const bw = tw + padX * 2;
+        const bh = fs + padY * 2;
+        c2d.globalAlpha = dim ? 0.28 : 0.92;
+        c2d.fillStyle = themeColors.surfaceHigh;
+        if (typeof c2d.roundRect === 'function') {
+          c2d.beginPath();
+          c2d.roundRect(bx, by, bw, bh, 4 / scale);
+          c2d.fill();
+        } else {
+          c2d.fillRect(bx, by, bw, bh);
+        }
+        c2d.globalAlpha = dim ? 0.3 : 1;
+        c2d.fillStyle = themeColors.onSurface;
+        c2d.fillText(label, x, by + padY);
+      }
+
+      c2d.restore();
+    },
+    [selectedId, activeFocusId, hoverId, anyActive, highlightNodes, themeColors],
+  );
+
+  const paintPointerArea = useCallback((node: GraphDatum, color: string, c2d: CanvasRenderingContext2D) => {
+    c2d.fillStyle = color;
+    c2d.beginPath();
+    c2d.arc(node.x ?? 0, node.y ?? 0, (node.r ?? MIN_NODE_RADIUS) + 2, 0, 2 * Math.PI);
+    c2d.fill();
+  }, []);
+
+  const linkColor = useCallback(
+    (link: LinkDatum) => {
+      const touches = highlightId && (idOf(link.source) === highlightId || idOf(link.target) === highlightId);
+      if (touches) return themeColors.primary;
+      return anyActive ? 'rgba(140,140,140,0.08)' : 'rgba(140,140,140,0.28)';
+    },
+    [highlightId, anyActive, themeColors],
+  );
+
+  const linkWidth = useCallback(
+    (link: LinkDatum) => {
+      const touches = highlightId && (idOf(link.source) === highlightId || idOf(link.target) === highlightId);
+      return touches ? 1.6 + (link.weight ?? 0) * 1.5 : 0.6;
+    },
+    [highlightId],
+  );
+
+  // ---- Selection / sidebar ---------------------------------------------
   const selectedRecipe = useMemo(
     () => ctx.recipes.find(r => r.id === selectedId) ?? null,
     [ctx.recipes, selectedId],
@@ -414,15 +423,11 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
 
   const similarList = useMemo(() => {
     if (!activeFocusId) return [];
-    return getSimilarRecipes(activeFocusId, ctx.recipes, 12).filter(
-      r => r.breakdown.score >= deferredThreshold,
-    );
+    return getSimilarRecipes(activeFocusId, ctx.recipes, 12).filter(r => r.breakdown.score >= deferredThreshold);
   }, [activeFocusId, ctx.recipes, deferredThreshold]);
 
   useEffect(() => {
-    document.title = activeFocusId
-      ? 'Similar recipes · COOKIE'
-      : 'Recipe graph · COOKIE';
+    document.title = activeFocusId ? 'Similar recipes · COOKIE' : 'Recipe graph · COOKIE';
     return () => {
       document.title = 'COOKIE';
     };
@@ -448,16 +453,6 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
     setSelectedId(prev => (prev === id ? null : id));
   }, []);
 
-  const handleKeyNode = useCallback(
-    (e: React.KeyboardEvent, id: string) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleSelectNode(id);
-      }
-    },
-    [handleSelectNode],
-  );
-
   const focusRecipe = activeFocusId ? ctx.recipes.find(r => r.id === activeFocusId) : null;
 
   const handleFocusRecipe = useCallback(
@@ -471,20 +466,20 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
 
   const handleCookWithSimilar = useCallback(() => {
     if (!focusRecipe || !onCookTogether) return;
-    const ids = [
-      focusRecipe.id,
-      ...similarList.slice(0, 3).map(s => s.recipe.id),
-    ];
-    onCookTogether(ids);
+    onCookTogether([focusRecipe.id, ...similarList.slice(0, 3).map(s => s.recipe.id)]);
   }, [focusRecipe, onCookTogether, similarList]);
+
+  const zoomBy = useCallback((factor: number) => {
+    const fg = fgRef.current;
+    if (!fg) return;
+    fg.zoom(Math.max(0.4, Math.min(6, fg.zoom() * factor)), 250);
+  }, []);
+
+  const fitView = useCallback(() => fgRef.current?.zoomToFit(500, 48), []);
 
   return (
     <SwipeBackWrapper onBack={() => navigateTo('library')}>
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-10 pb-24"
-      >
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-10 pb-24">
         <button
           type="button"
           onClick={() => navigateTo('library')}
@@ -501,8 +496,8 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
           </p>
           <h1 className="text-5xl md:text-7xl font-headline italic leading-none">Recipe graph</h1>
           <p className="text-on-surface-variant max-w-2xl">
-            Explore how your recipes relate through shared ingredients, tags, and cuisine.
-            Bigger circles take longer to cook; colors group recipes by region of origin.
+            Explore how your recipes relate through shared ingredients, tags, and cuisine. Drag nodes to rearrange,
+            scroll to zoom. Bigger circles take longer to cook; colors group recipes by region of origin.
             {focusRecipe ? (
               <> Focused on <span className="text-primary font-headline italic">{focusRecipe.title}</span>.</>
             ) : null}
@@ -567,164 +562,51 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                 </p>
               </div>
             ) : (
-              <div
-                className="relative rounded-2xl border border-outline-variant/30 bg-surface overflow-hidden"
-                role="img"
-                aria-label="Recipe similarity graph"
-              >
-                {!hasLayout && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface">
-                    <span
-                      className="inline-block w-6 h-6 rounded-full border-2 border-outline-variant border-t-primary animate-spin"
-                      aria-hidden
+              <div className="rounded-2xl border border-outline-variant/30 bg-surface overflow-hidden">
+                <div ref={wrapRef} className="relative w-full" style={{ height: size.h || 520 }} aria-label="Recipe similarity graph" role="group">
+                  {size.w > 0 && mountGraph && (
+                    <ForceGraph2D
+                      ref={((el: any) => {
+                        fgRef.current = el;
+                        if (el && !fgReady) setFgReady(true);
+                      }) as any}
+                      width={size.w}
+                      height={size.h}
+                      graphData={graphData as any}
+                      nodeId="id"
+                      backgroundColor="rgba(0,0,0,0)"
+                      nodeCanvasObjectMode={() => 'replace'}
+                      nodeCanvasObject={paintNode as any}
+                      nodePointerAreaPaint={paintPointerArea as any}
+                      linkColor={linkColor as any}
+                      linkWidth={linkWidth as any}
+                      enableNodeDrag
+                      onNodeDragEnd={(n: any) => {
+                        n.fx = undefined;
+                        n.fy = undefined;
+                      }}
+                      onNodeHover={(n: any) => setHoverId(n ? n.id : null)}
+                      onNodeClick={(n: any) => handleSelectNode(n.id)}
+                      onBackgroundClick={() => setSelectedId(null)}
+                      warmupTicks={reduceMotion ? 220 : 0}
+                      cooldownTicks={reduceMotion ? 0 : undefined}
+                      d3VelocityDecay={0.3}
+                      minZoom={0.4}
+                      maxZoom={6}
+                      onEngineStop={handleEngineStop}
                     />
-                    <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
-                      Building graph…
-                    </p>
-                  </div>
-                )}
-                <svg
-                  ref={svgRef}
-                  viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
-                  className="w-full h-auto max-h-[min(80vh,680px)]"
-                  style={{
-                    opacity: hasLayout ? 1 : 0,
-                    transition: 'opacity 0.4s ease',
-                    touchAction: view.scale > 1 ? 'none' : 'pan-y',
-                    cursor: panRef.current.active ? 'grabbing' : 'grab',
-                  }}
-                  onPointerDown={beginPan}
-                  onPointerMove={movePan}
-                  onPointerUp={endPan}
-                  onPointerCancel={endPan}
-                >
-                  <g
-                    transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}
-                    style={{ transition: panRef.current.active ? 'none' : 'transform 0.18s ease' }}
-                  >
-                  {graph.edges.map(edge => {
-                    const a = positions.get(edge.source);
-                    const b = positions.get(edge.target);
-                    if (!a || !b) return null;
-                    const highlighted =
-                      selectedId === edge.source ||
-                      selectedId === edge.target ||
-                      activeFocusId === edge.source ||
-                      activeFocusId === edge.target;
-                    const anyActive = Boolean(selectedId || activeFocusId);
-                    return (
-                      <line
-                        key={`${edge.source}-${edge.target}`}
-                        x1={a.x}
-                        y1={a.y}
-                        x2={b.x}
-                        y2={b.y}
-                        stroke="currentColor"
-                        strokeWidth={highlighted ? 3 + edge.weight * 2 : 1.5}
-                        strokeLinecap="round"
-                        className={highlighted ? 'text-primary' : 'text-outline-variant'}
-                        style={{
-                          opacity: highlighted ? 0.8 : anyActive ? 0.12 : 0.4,
-                          transition: 'opacity 0.2s',
-                        }}
-                      />
-                    );
-                  })}
-                  {graph.nodes.map(node => {
-                    const pos = positions.get(node.id);
-                    if (!pos) return null;
-                    const isSelected = selectedId === node.id;
-                    const isFocus = activeFocusId === node.id;
-                    const isActive = isSelected || isFocus;
-                    const isHovered = hoverId === node.id;
-                    const region = getRecipeRegion(node.recipe);
-                    const r = radiusOf(node.id);
-                    const minutes = minutesById.get(node.id) ?? null;
-                    // Dim nodes that aren't selected/focused while something is active.
-                    const dim = (selectedId || activeFocusId) && !isActive && !isHovered;
-                    // Title labels only appear for the active/hovered node to keep
-                    // the canvas readable; the time always shows inside the circle.
-                    const showLabel = isActive || isHovered;
-                    const label = node.recipe.title.length > 22
-                      ? `${node.recipe.title.slice(0, 20)}…`
-                      : node.recipe.title;
-                    return (
-                      <g
-                        key={node.id}
-                        transform={`translate(${pos.x}, ${pos.y})`}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${node.recipe.title}, ${region.label}, ${formatMinutes(minutes)}`}
-                        aria-pressed={isSelected}
-                        className="cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                        style={{ opacity: dim ? 0.3 : 1, transition: 'opacity 0.2s' }}
-                        onPointerDown={e => e.stopPropagation()}
-                        onClick={() => handleSelectNode(node.id)}
-                        onKeyDown={e => handleKeyNode(e, node.id)}
-                        onMouseEnter={() => setHoverId(node.id)}
-                        onMouseLeave={() => setHoverId(prev => (prev === node.id ? null : prev))}
-                        onFocus={() => setHoverId(node.id)}
-                        onBlur={() => setHoverId(prev => (prev === node.id ? null : prev))}
-                      >
-                        {(isActive || isHovered) && (
-                          <circle
-                            r={r + 6}
-                            fill="none"
-                            stroke={regionFill(region, true)}
-                            strokeWidth={2.5}
-                            opacity={0.55}
-                          />
-                        )}
-                        <circle
-                          r={r}
-                          fill={regionFill(region, isActive)}
-                          stroke={isActive ? '#fff' : regionStroke(region)}
-                          strokeWidth={isActive ? 3 : 1.5}
-                        />
-                        {r >= 20 && (
-                          <text
-                            y={4}
-                            textAnchor="middle"
-                            className="fill-white font-label font-bold pointer-events-none"
-                            style={{ fontSize: Math.max(9, Math.min(12, r / 3.2)) }}
-                          >
-                            {formatMinutes(minutes)
-                              .replace(' min', 'm')
-                              .replace(' hr', 'h')
-                              .replace('Time unknown', '?')}
-                          </text>
-                        )}
-                        {showLabel && (
-                          <g className="pointer-events-none">
-                            <rect
-                              x={-label.length * 3.4 - 6}
-                              y={r + 4}
-                              width={label.length * 6.8 + 12}
-                              height={18}
-                              rx={9}
-                              className="fill-surface-container-high"
-                              opacity={0.95}
-                            />
-                            <text
-                              y={r + 16}
-                              textAnchor="middle"
-                              className="fill-on-surface text-[11px] font-label font-bold tracking-wide"
-                            >
-                              {label}
-                            </text>
-                          </g>
-                        )}
-                      </g>
-                    );
-                  })}
-                  </g>
-                </svg>
+                  )}
+                  {(size.w === 0 || !mountGraph) && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                      <span className="inline-block w-6 h-6 rounded-full border-2 border-outline-variant border-t-primary animate-spin" aria-hidden />
+                      <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">Building graph…</p>
+                    </div>
+                  )}
 
-                {hasLayout && (
                   <div className="absolute top-3 right-3 flex flex-col gap-1.5">
                     <button
                       type="button"
-                      onClick={() => zoomBy(1.25)}
+                      onClick={() => zoomBy(1.3)}
                       aria-label="Zoom in"
                       className="w-9 h-9 flex items-center justify-center rounded-full border border-outline-variant/50 bg-surface/90 backdrop-blur text-on-surface-variant hover:text-primary hover:border-primary/50 shadow-sm"
                     >
@@ -732,7 +614,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => zoomBy(0.8)}
+                      onClick={() => zoomBy(0.75)}
                       aria-label="Zoom out"
                       className="w-9 h-9 flex items-center justify-center rounded-full border border-outline-variant/50 bg-surface/90 backdrop-blur text-on-surface-variant hover:text-primary hover:border-primary/50 shadow-sm"
                     >
@@ -740,29 +622,23 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={resetView}
-                      aria-label="Reset view"
-                      disabled={!isZoomed}
-                      className="w-9 h-9 flex items-center justify-center rounded-full border border-outline-variant/50 bg-surface/90 backdrop-blur text-on-surface-variant hover:text-primary hover:border-primary/50 shadow-sm disabled:opacity-40 disabled:pointer-events-none"
+                      onClick={fitView}
+                      aria-label="Fit graph to view"
+                      className="w-9 h-9 flex items-center justify-center rounded-full border border-outline-variant/50 bg-surface/90 backdrop-blur text-on-surface-variant hover:text-primary hover:border-primary/50 shadow-sm"
                     >
                       <Maximize size={15} />
                     </button>
                   </div>
-                )}
+                </div>
 
                 <div className="border-t border-outline-variant/30 px-5 py-4 space-y-3 bg-surface-container-low/30">
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                    <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-                      Region of origin
-                    </span>
+                    <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Region of origin</span>
                     {regionLegend.map(region => (
                       <span key={region.key} className="flex items-center gap-2">
                         <span
                           className="inline-block w-3 h-3 rounded-full shrink-0"
-                          style={{
-                            backgroundColor: regionFill(region),
-                            border: `1.5px solid ${regionStroke(region)}`,
-                          }}
+                          style={{ backgroundColor: regionFill(region), border: `1.5px solid ${regionStroke(region)}` }}
                         />
                         <span className="text-xs text-on-surface">{region.label}</span>
                       </span>
