@@ -2,7 +2,7 @@ import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useSt
 import { motion } from 'motion/react';
 import { ChevronLeft, Play, ExternalLink, Network, ChefHat, Clock, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { forceCollide } from 'd3-force';
+import { forceCollide, forceX, forceY } from 'd3-force';
 import { Screen } from '../hooks/useNavigation';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { useRecipes } from '../context/RecipeContext';
@@ -281,6 +281,12 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
         .strength((l: LinkDatum) => 0.06 + l.weight * 0.28);
     }
     fg.d3Force('collide', forceCollide((n: GraphDatum) => (n.r ?? MIN_NODE_RADIUS) + 3).strength(0.95).iterations(3));
+    // Gentle pull toward the centre on every node. forceCenter alone only shifts
+    // the centroid — it applies no attraction — so weakly-connected nodes drift
+    // outward and pile against the edges, leaving the middle empty. forceX/forceY
+    // draw nodes inward so the graph fills as a compact, centred cloud.
+    fg.d3Force('x', forceX(0).strength(0.07));
+    fg.d3Force('y', forceY(0).strength(0.07));
     fg.d3ReheatSimulation?.();
   }, [fgReady, graphData, radiusOf]);
 
