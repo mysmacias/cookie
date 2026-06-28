@@ -103,6 +103,10 @@ describe('mapSchemaToCookieRecipe', () => {
     expect(mapped.id).toMatch(/^scrape_/);
     expect(mapped.ingredients).toHaveLength(2);
     expect(mapped.steps).toHaveLength(2);
-    expect(mapped.tags).toContain('web');
+    // Tags come from schema keywords plus the source hostname; the boilerplate
+    // 'web'/'imported' tags were removed in b7f9108.
+    expect(mapped.tags).toEqual(expect.arrayContaining(['cookies', 'dessert', 'baking', 'example.com']));
+    expect(mapped.tags).not.toContain('web');
+    expect(mapped.tags).not.toContain('imported');
   });
 });
