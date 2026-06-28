@@ -21,7 +21,19 @@ export interface CookPlan {
   startAt: Date;
 }
 
+/**
+ * How dishes that would otherwise finish at different times are reconciled:
+ * - `asap`   — every dish starts as early as the cook is free; each finishes
+ *              when it's done (no artificial waiting, dishes ready staggered).
+ * - `together` — shorter dishes are delayed so all dishes are ready at the same
+ *                moment; a keep-warm hold is only added when the cook physically
+ *                cannot serialize two finishes (last resort, minimized).
+ */
+export type ServeMode = 'asap' | 'together';
+
 export interface BuildCookPlanOptions {
+  /** Defaults to `together` to preserve synchronized-serve behavior. */
+  serveMode?: ServeMode;
   targetReadyAt?: Date;
   startNow?: boolean;
   /** Reference time for startNow (defaults to now). */
@@ -33,6 +45,49 @@ interface StepSegment {
   durationMinutes: number;
   isPassive: boolean;
   timerSeconds?: number;
+}
+
+/**
+ * Timing fingerprint of a single recipe, used by the planner UI to show how
+ * "stackable" a dish is (passive windows free the cook to work on other dishes).
+ */
+export interface RecipeTimingProfile {
+  activeMinutes: number;
+  passiveMinutes: number;
+  totalMinutes: number;
+  /** Number of hands-free (timer) steps. */
+  passiveWindows: number;
+  /** Longest single hands-free window, in minutes. */
+  longestPassiveMinutes: number;
+  stepCount: number;
+}
+
+export function recipeTimingProfile(
+  recipe: Recipe,
+  defaultActiveMinutes = DEFAULT_ACTIVE_MINUTES,
+): RecipeTimingProfile {
+  let activeMinutes = 0;
+  let passiveMinutes = 0;
+  let passiveWindows = 0;
+  let longestPassiveMinutes = 0;
+  for (const step of recipe.steps) {
+    const seg = parseStepSegment(step, defaultActiveMinutes);
+    if (seg.isPassive) {
+      passiveMinutes += seg.durationMinutes;
+      passiveWindows += 1;
+      longestPassiveMinutes = Math.max(longestPassiveMinutes, seg.durationMinutes);
+    } else {
+      activeMinutes += seg.durationMinutes;
+    }
+  }
+  return {
+    activeMinutes,
+    passiveMinutes,
+    totalMinutes: activeMinutes + passiveMinutes,
+    passiveWindows,
+    longestPassiveMinutes,
+    stepCount: recipe.steps.length,
+  };
 }
 
 export function parseStepSegment(
@@ -76,32 +131,29 @@ function makeCookTask(
   };
 }
 
-function recipeSequentialMinutes(recipe: Recipe, defaultActive: number): number {
-  return recipe.steps.reduce(
-    (sum, step) => sum + parseStepSegment(step, defaultActive).durationMinutes,
-    0,
-  );
+interface ForwardSchedule {
+  tasks: CookTask[];
+  /** Wall-clock offset at which each recipe's last step finishes. */
+  recipeEnds: Map<string, number>;
+  makespan: number;
 }
 
 /**
- * Greedy forward scheduler: passive steps free the cook while the recipe lane
- * advances; active steps from other recipes fill those windows when possible.
- * Shorter recipes start later so every dish finishes together.
+ * Greedy single-cook scheduler. Passive (timer) steps run hands-free, so the
+ * cook can advance another recipe's active step during those windows; active
+ * steps serialize on the one cook. `releases` lets a recipe be held back from
+ * starting before a given offset (used to delay short dishes in `together`
+ * mode). Per-recipe step order is always preserved.
  */
-export function buildCookPlan(recipes: Recipe[], options: BuildCookPlanOptions = {}): CookPlan {
-  if (recipes.length === 0) {
-    const now = options.now ?? new Date();
-    return { tasks: [], readyAt: now, totalDurationMinutes: 0, startAt: now };
-  }
-
-  const defaultActive = options.defaultActiveMinutes ?? DEFAULT_ACTIVE_MINUTES;
-  const durations = recipes.map(r => recipeSequentialMinutes(r, defaultActive));
-  const syncDuration = Math.max(...durations);
-
+function scheduleForward(
+  recipes: Recipe[],
+  releases: Map<string, number>,
+  defaultActive: number,
+): ForwardSchedule {
   const lanes: RecipeLane[] = recipes.map(recipe => ({
     recipe,
     stepIndex: 0,
-    readyAt: 0,
+    readyAt: releases.get(recipe.id) ?? 0,
   }));
 
   const tasks: CookTask[] = [];
@@ -152,6 +204,7 @@ export function buildCookPlan(recipes: Recipe[], options: BuildCookPlanOptions =
 
     if (startPassiveIfReady()) continue;
 
+    // Cook is idle: jump to the next moment a lane frees up (or is released).
     const pending = lanes.filter(l => !laneDone(l));
     const nextTimes = pending
       .map(l => l.readyAt)
@@ -178,25 +231,69 @@ export function buildCookPlan(recipes: Recipe[], options: BuildCookPlanOptions =
     recipeEnds.set(id, end);
   }
 
-  const preSyncEnd = Math.max(syncDuration, ...recipeEnds.values());
+  const makespan = Math.max(0, ...recipeEnds.values());
+  return { tasks, recipeEnds, makespan };
+}
 
-  for (const lane of lanes) {
-    const id = lane.recipe.id;
-    const end = recipeEnds.get(id) ?? 0;
-    if (end < preSyncEnd - 0.001) {
-      tasks.push({
-        recipeId: id,
-        recipeTitle: lane.recipe.title,
-        stepIndex: lane.recipe.steps.length,
+/** Append "keep warm" tasks so every dish spans up to `serveAt`. */
+function addHoldTasks(schedule: ForwardSchedule, recipes: Recipe[], serveAt: number): void {
+  for (const recipe of recipes) {
+    const end = schedule.recipeEnds.get(recipe.id) ?? 0;
+    if (end < serveAt - 0.001) {
+      schedule.tasks.push({
+        recipeId: recipe.id,
+        recipeTitle: recipe.title,
+        stepIndex: recipe.steps.length,
         title: 'Hold for synchronized serve',
         description: 'Keep warm until all dishes are ready to serve together.',
         startOffsetMinutes: end,
-        durationMinutes: preSyncEnd - end,
+        durationMinutes: serveAt - end,
         isPassive: true,
       });
     }
   }
+}
 
+/**
+ * Build a unified cook timeline for several recipes sharing one cook.
+ *
+ * `asap` schedules everything as early as possible — dishes finish staggered.
+ * `together` first finds the as-soon-as-possible finish of each dish, then
+ * delays the shorter ones so they finish alongside the longest dish (delaying
+ * the start beats cooking early then keeping warm). A keep-warm hold is only
+ * added for the residual gap when the cook cannot serialize two finishes.
+ */
+export function buildCookPlan(recipes: Recipe[], options: BuildCookPlanOptions = {}): CookPlan {
+  if (recipes.length === 0) {
+    const now = options.now ?? new Date();
+    return { tasks: [], readyAt: now, totalDurationMinutes: 0, startAt: now };
+  }
+
+  const defaultActive = options.defaultActiveMinutes ?? DEFAULT_ACTIVE_MINUTES;
+  const serveMode: ServeMode = options.serveMode ?? 'together';
+  const noReleases = new Map<string, number>();
+
+  // Pass 1: as-soon-as-possible — every dish starts at offset 0.
+  const asap = scheduleForward(recipes, noReleases, defaultActive);
+
+  let schedule = asap;
+  let serveAt = asap.makespan;
+
+  if (serveMode === 'together' && recipes.length > 1) {
+    // Delay each dish by its slack so its finish lines up with the latest dish.
+    const releases = new Map<string, number>();
+    for (const recipe of recipes) {
+      const end = asap.recipeEnds.get(recipe.id) ?? 0;
+      releases.set(recipe.id, Math.max(0, asap.makespan - end));
+    }
+    schedule = scheduleForward(recipes, releases, defaultActive);
+    // Contention between two late finishes can push the makespan out; serve
+    // everyone at the new latest finish and keep-warm only the residual gap.
+    serveAt = schedule.makespan;
+    addHoldTasks(schedule, recipes, serveAt);
+  }
+
+  const tasks = schedule.tasks;
   tasks.sort((a, b) => {
     if (a.startOffsetMinutes !== b.startOffsetMinutes) {
       return a.startOffsetMinutes - b.startOffsetMinutes;
@@ -206,7 +303,7 @@ export function buildCookPlan(recipes: Recipe[], options: BuildCookPlanOptions =
   });
 
   const totalDurationMinutes = Math.max(
-    preSyncEnd,
+    serveAt,
     ...tasks.map(t => t.startOffsetMinutes + t.durationMinutes),
   );
 
@@ -218,8 +315,8 @@ export function buildCookPlan(recipes: Recipe[], options: BuildCookPlanOptions =
     readyAt = options.targetReadyAt;
     startAt = new Date(readyAt.getTime() - totalDurationMinutes * 60_000);
   } else {
-    startAt = options.startNow !== false ? now : now;
-    readyAt = new Date(startAt.getTime() + totalDurationMinutes * 60_000);
+    startAt = now;
+    readyAt = new Date(now.getTime() + totalDurationMinutes * 60_000);
   }
 
   return { tasks, readyAt, totalDurationMinutes, startAt };
