@@ -472,7 +472,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
   const zoomBy = useCallback((factor: number) => {
     const fg = fgRef.current;
     if (!fg) return;
-    fg.zoom(Math.max(0.4, Math.min(6, fg.zoom() * factor)), 250);
+    fg.zoom(Math.max(0.05, Math.min(6, fg.zoom() * factor)), 250);
   }, []);
 
   const fitView = useCallback(() => fgRef.current?.zoomToFit(500, 48), []);
@@ -591,7 +591,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                       warmupTicks={reduceMotion ? 220 : 0}
                       cooldownTicks={reduceMotion ? 0 : undefined}
                       d3VelocityDecay={0.3}
-                      minZoom={0.4}
+                      minZoom={0.05}
                       maxZoom={6}
                       onEngineStop={handleEngineStop}
                     />
