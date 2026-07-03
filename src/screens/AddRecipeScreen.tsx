@@ -18,9 +18,12 @@ interface AddRecipeScreenProps {
 
 export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editingRecipe, onSaved }) => {
   const form = useRecipeForm(editingRecipe, onSaved);
+  // A resumed draft is technically "editing" an existing record, but to the cook
+  // it's still the new recipe they started — so it gets its own framing.
+  const isDraft = editingRecipe?.draft === true;
 
   const handleBack = () => {
-    form.persistEditNow();
+    form.persistNow();
     onBack();
   };
 
@@ -42,12 +45,14 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
 
         <div className="space-y-4">
           <h1 className="text-6xl font-headline italic">
-            {form.isEdit ? 'Edit Recipe' : 'Submit a Recipe'}
+            {isDraft ? 'Finish your recipe' : form.isEdit ? 'Edit Recipe' : 'Submit a Recipe'}
           </h1>
           <p className="text-on-surface-variant text-lg">
-            {form.isEdit
+            {isDraft
+              ? 'Pick up where you left off — we keep saving your draft as you go.'
+              : form.isEdit
               ? 'Changes are saved automatically as you edit — no need to reach the last step.'
-              : 'Share your culinary secrets with COOKIE.'}
+              : 'Share your culinary secrets with COOKIE. We save your progress as a draft as you go.'}
           </p>
         </div>
 
@@ -118,6 +123,7 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
             ingredients={form.ingredients}
             steps={form.steps}
             isEdit={form.isEdit}
+            isDraft={isDraft}
             onBack={() => form.setWizardStep(3)}
             onSubmit={() => void form.submit(onBack)}
           />

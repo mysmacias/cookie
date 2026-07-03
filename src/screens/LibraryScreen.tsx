@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { BookOpen, Search } from 'lucide-react';
+import { BookOpen, Search, FileEdit } from 'lucide-react';
 import { Recipe } from '../types';
 import { RecipeCard } from '../components/RecipeCard';
+import { DraftCard } from '../components/DraftCard';
 import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
 import { ExportRecipeModal } from '../components/ExportRecipeModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LibraryToolbar } from '../components/LibraryToolbar';
 import { Screen } from '../hooks/useNavigation';
 import { useLibraryFilters } from '../hooks/useLibraryFilters';
@@ -15,16 +17,20 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 interface LibraryScreenProps {
   navigateTo: (screen: Screen, recipe?: Recipe) => void;
   startCooking: (recipe: Recipe) => void;
+  onResumeDraft: (recipe: Recipe) => void;
   onCookTogether?: (recipeIds: string[]) => void;
 }
 
-export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startCooking, onCookTogether }) => {
+export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startCooking, onResumeDraft, onCookTogether }) => {
   const lib = useLibraryFilters();
   const { showToast } = useToast();
-  const { isLoading } = useRecipes();
+  const { isLoading, deleteRecipe } = useRecipes();
   const reducedMotion = useReducedMotion();
   const [exportOpen, setExportOpen] = useState(false);
   const [exportRecipes, setExportRecipes] = useState<Recipe[]>([]);
+  const [draftToDiscard, setDraftToDiscard] = useState<Recipe | null>(null);
+
+  const isDrafts = lib.filter === 'drafts';
 
   const openExport = (list: Recipe[]) => {
     if (list.length === 0) return;
@@ -32,11 +38,27 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
     setExportOpen(true);
   };
 
+  const confirmDiscardDraft = async () => {
+    if (!draftToDiscard) return;
+    const title = draftToDiscard.title || 'Untitled recipe';
+    try {
+      await deleteRecipe(draftToDiscard.id);
+      showToast(`Discarded draft “${title}”.`);
+    } catch {
+      showToast('Could not discard draft. Try again.');
+    } finally {
+      setDraftToDiscard(null);
+    }
+  };
+
   const motionProps = reducedMotion
     ? {}
     : { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } };
 
   const emptyMessage = () => {
+    if (isDrafts) {
+      return 'No drafts. When you start adding a recipe, we save your progress here automatically.';
+    }
     if (lib.filter === 'bookmarked') {
       return 'No bookmarked recipes yet. Tap the heart icon on any recipe to save it here.';
     }
@@ -56,6 +78,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
         setSearchQuery={lib.setSearchQuery}
         filter={lib.filter}
         setFilter={lib.setFilter}
+        draftCount={lib.draftCount}
         sort={lib.sort}
         setSort={lib.setAndPersistSort}
         selectionMode={lib.selectionMode}
@@ -98,7 +121,9 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
         </div>
       ) : lib.filteredRecipes.length === 0 ? (
         <div className="rounded-2xl border border-outline-variant/40 bg-surface-container-low/50 p-12 text-center space-y-4">
-          {lib.searchQuery.trim() ? (
+          {isDrafts ? (
+            <FileEdit className="mx-auto text-outline-variant" size={40} strokeWidth={1.25} />
+          ) : lib.searchQuery.trim() ? (
             <Search className="mx-auto text-outline-variant" size={40} strokeWidth={1.25} />
           ) : (
             <BookOpen className="mx-auto text-outline-variant" size={40} strokeWidth={1.25} />
@@ -111,20 +136,29 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
           style={{ scale: lib.gridScale, touchAction: 'pan-y pinch-zoom' }}
           className={`grid ${lib.gridColsClass} gap-x-8 gap-y-16 origin-top transition-[grid-template-columns] duration-300`}
         >
-          {lib.filteredRecipes.map((recipe) => (
-            <RecipeCard
-              key={recipe.id}
-              recipe={recipe}
-              isBookmarked={lib.bookmarkedSet.has(recipe.id)}
-              onToggleBookmark={() => lib.handleToggleBookmark(recipe.id)}
-              onRecipeImageChanged={lib.refreshRecipes}
-              selectionMode={lib.selectionMode}
-              selected={!!lib.selectedIds[recipe.id]}
-              onSelectToggle={() => lib.toggleSelect(recipe.id)}
-              onClick={() => navigateTo('detail', recipe)}
-              onCookTonight={() => startCooking(recipe)}
-            />
-          ))}
+          {isDrafts
+            ? lib.filteredRecipes.map((recipe) => (
+                <DraftCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  onResume={() => onResumeDraft(recipe)}
+                  onDiscard={() => setDraftToDiscard(recipe)}
+                />
+              ))
+            : lib.filteredRecipes.map((recipe) => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  isBookmarked={lib.bookmarkedSet.has(recipe.id)}
+                  onToggleBookmark={() => lib.handleToggleBookmark(recipe.id)}
+                  onRecipeImageChanged={lib.refreshRecipes}
+                  selectionMode={lib.selectionMode}
+                  selected={!!lib.selectedIds[recipe.id]}
+                  onSelectToggle={() => lib.toggleSelect(recipe.id)}
+                  onClick={() => navigateTo('detail', recipe)}
+                  onCookTonight={() => startCooking(recipe)}
+                />
+              ))}
         </motion.div>
       )}
 
@@ -133,6 +167,17 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportRecipes([]); }}
         onFeedback={showToast}
+      />
+
+      <ConfirmDialog
+        open={draftToDiscard !== null}
+        title="Discard draft?"
+        message={`“${draftToDiscard?.title || 'Untitled recipe'}” will be permanently deleted. This can't be undone.`}
+        confirmLabel="Discard"
+        cancelLabel="Keep"
+        destructive
+        onConfirm={() => void confirmDiscardDraft()}
+        onCancel={() => setDraftToDiscard(null)}
       />
     </motion.div>
   );

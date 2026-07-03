@@ -18,6 +18,7 @@ interface RecipeFormReviewProps {
   ingredients: Ingredient[];
   steps: Step[];
   isEdit: boolean;
+  isDraft?: boolean;
   onBack: () => void;
   onSubmit: () => void;
 }
@@ -25,7 +26,7 @@ interface RecipeFormReviewProps {
 export const RecipeFormReview: React.FC<RecipeFormReviewProps> = ({
   title, description, heroImage, category, difficulty, prepTime,
   bakeTime, yields, chefNote,
-  tags, ingredients, steps, isEdit, onBack, onSubmit,
+  tags, ingredients, steps, isEdit, isDraft = false, onBack, onSubmit,
 }) => (
   <motion.div
     key="step4"
@@ -111,7 +112,7 @@ export const RecipeFormReview: React.FC<RecipeFormReviewProps> = ({
     <div className="flex items-center gap-4 pt-4">
       <Button variant="outline" onClick={onBack}>Back</Button>
       <Button variant="primary" size="lg" onClick={onSubmit} className="flex-1">
-        {isEdit ? 'Save changes' : 'Submit recipe'}
+        {isEdit && !isDraft ? 'Save changes' : 'Submit recipe'}
       </Button>
     </div>
   </motion.div>

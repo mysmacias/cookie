@@ -42,4 +42,11 @@ export interface Recipe {
   addedAt?: number;
   /** Original page URL when imported from the web */
   sourceUrl?: string;
+  /**
+   * True while the recipe is an in-progress draft (started in the Add Recipe
+   * wizard but not yet published). Drafts are kept out of the main library and
+   * cooking flows, and surfaced in the Library's "Drafts" section. Cleared when
+   * the user finishes the wizard.
+   */
+  draft?: boolean;
 }

@@ -12,12 +12,14 @@ import {
 } from '../services/recipeApi';
 import {
   getAllRecipes as storeGetAll,
+  getDraftRecipes as storeGetDrafts,
   isBookmarked as storeIsBookmarked,
   getBookmarkedIds as storeBookmarkedIds,
 } from '../services/recipeStore';
 
 interface RecipeContextValue {
   recipes: Recipe[];
+  drafts: Recipe[];
   bookmarkedIds: string[];
   isLoading: boolean;
   addRecipe: (recipe: Omit<Recipe, 'id'>) => Promise<Recipe>;
@@ -41,12 +43,14 @@ export function useRecipes(): RecipeContextValue {
 export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isGuest } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [drafts, setDrafts] = useState<Recipe[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [version, setVersion] = useState(0);
 
   const syncFromCache = useCallback(() => {
     setRecipes(storeGetAll());
+    setDrafts(storeGetDrafts());
     setBookmarkedIds(storeBookmarkedIds());
     setVersion(v => v + 1);
   }, []);
@@ -60,6 +64,7 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!isAuthenticated) {
       clearUserDataCache();
       setRecipes([]);
+      setDrafts([]);
       setBookmarkedIds([]);
       return;
     }
@@ -111,6 +116,7 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const value = useMemo<RecipeContextValue>(() => ({
     recipes,
+    drafts,
     bookmarkedIds,
     isLoading,
     addRecipe,
@@ -121,7 +127,7 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isBookmarked,
     refreshRecipes: refresh,
     version,
-  }), [recipes, bookmarkedIds, isLoading, addRecipe, updateRecipe, deleteRecipe, duplicateRecipe, toggleBookmark, isBookmarked, refresh, version]);
+  }), [recipes, drafts, bookmarkedIds, isLoading, addRecipe, updateRecipe, deleteRecipe, duplicateRecipe, toggleBookmark, isBookmarked, refresh, version]);
 
   return (
     <RecipeContext.Provider value={value}>

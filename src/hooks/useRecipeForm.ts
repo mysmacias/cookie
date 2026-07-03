@@ -55,6 +55,14 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     chefNote: chefNote.trim() || undefined,
   }), [title, description, heroImage, difficulty, timeDisplay, prepTime, bakeTime, yields, category, tags, ingredients, steps, chefNote]);
 
+  // Draft bookkeeping for the "new recipe" flow: the wizard auto-saves the
+  // in-progress recipe as a draft (draft: true) so nothing is lost, then clears
+  // the flag when the user finishes. draftIdRef holds the id once created.
+  const draftIdRef = useRef<string | null>(null);
+  const creatingDraftRef = useRef(false);
+  const isDraftRef = useRef<boolean>(editingRecipe?.draft === true);
+  const submittedRef = useRef(false);
+
   const formSnapRef = useRef<PersistSnap>({
     editId: null,
     payload: {
@@ -88,6 +96,8 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     setIngredients(editingRecipe.ingredients.map(i => ({ ...i })));
     setSteps(editingRecipe.steps.map(s => ({ ...s })));
     setWizardStep(1);
+    isDraftRef.current = editingRecipe.draft === true;
+    submittedRef.current = false;
     skipAutosaveUntil.current = Date.now() + 350;
   }, [editingRecipe]);
 
@@ -95,36 +105,74 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [wizardStep]);
 
-  // Autosave on edit
+  // Persist the in-progress form. A new recipe is saved as a draft (draft: true)
+  // the moment it has a title, then updated in place as the user keeps typing;
+  // editing an existing recipe preserves its current draft status. Publishing
+  // (submit) flips submittedRef so no trailing save can resurrect the draft.
+  const performSave = useCallback(async () => {
+    if (submittedRef.current) return;
+    const snap = formSnapRef.current;
+    if (!snap.payload.title.trim()) return;
+    const keepDraft = isDraftRef.current;
+
+    if (snap.editId) {
+      await ctx.updateRecipe({
+        id: snap.editId,
+        isHeirloom: snap.isHeirloom,
+        ...snap.payload,
+        draft: keepDraft ? true : undefined,
+      });
+      onSavedRef.current?.();
+      return;
+    }
+
+    if (draftIdRef.current) {
+      await ctx.updateRecipe({
+        id: draftIdRef.current,
+        ...snap.payload,
+        draft: keepDraft ? true : undefined,
+      });
+      onSavedRef.current?.();
+      return;
+    }
+
+    // First save of a brand-new recipe: create it as a draft. The guard stops a
+    // concurrent unmount/back save from creating a second draft.
+    if (creatingDraftRef.current) return;
+    creatingDraftRef.current = true;
+    try {
+      const created = await ctx.addRecipe({ ...snap.payload, draft: true });
+      draftIdRef.current = created.id;
+      isDraftRef.current = true;
+      onSavedRef.current?.();
+    } finally {
+      creatingDraftRef.current = false;
+    }
+  }, [ctx]);
+
+  // Call the latest performSave from effects/handlers that must not re-run when
+  // the closure changes (unmount, debounce timer).
+  const performSaveRef = useRef(performSave);
+  performSaveRef.current = performSave;
+
+  // Debounced autosave for both new (draft) and existing recipes.
   useEffect(() => {
-    if (!editingRecipe?.id) return;
     if (!title.trim()) return;
-    const id = editingRecipe.id;
-    const isHeirloom = editingRecipe.isHeirloom;
     const timer = window.setTimeout(() => {
       if (Date.now() < skipAutosaveUntil.current) return;
-      const snap = formSnapRef.current;
-      if (!snap.editId || snap.editId !== id) return;
-      if (!snap.payload.title.trim()) return;
-      void ctx.updateRecipe({ id, isHeirloom, ...snap.payload });
-      onSavedRef.current?.();
+      void performSaveRef.current();
     }, 420);
     return () => clearTimeout(timer);
-  }, [editingRecipe?.id, editingRecipe?.isHeirloom, title, description, prepTime, timeDisplay, bakeTime, yields, heroImage, difficulty, category, tags, chefNote, ingredients, steps]);
+  }, [title, description, prepTime, timeDisplay, bakeTime, yields, heroImage, difficulty, category, tags, chefNote, ingredients, steps]);
 
-  const persistEditNow = useCallback(() => {
-    if (!editingRecipe?.id || !title.trim()) return;
-    void ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: !!editingRecipe.isHeirloom, ...buildPayload() });
-    onSavedRef.current?.();
-  }, [editingRecipe, title, buildPayload]);
+  const persistNow = useCallback(() => {
+    void performSaveRef.current();
+  }, []);
 
-  // Persist on unmount
+  // Persist on unmount (e.g. browser back / swipe) so drafts and edits survive.
   useEffect(() => {
     return () => {
-      const { editId, isHeirloom, payload } = formSnapRef.current;
-      if (!editId || !payload.title.trim()) return;
-      void ctx.updateRecipe({ id: editId, isHeirloom, ...payload });
-      onSavedRef.current?.();
+      void performSaveRef.current();
     };
   }, []);
 
@@ -178,14 +226,18 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
   }, []);
 
   const submit = useCallback(async (onBack: () => void) => {
+    // Publishing: stop autosave from re-drafting and clear the draft flag.
+    submittedRef.current = true;
+    isDraftRef.current = false;
     const payload = buildPayload();
     if (editingRecipe) {
       await ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: editingRecipe.isHeirloom, ...payload });
-      onSavedRef.current?.();
+    } else if (draftIdRef.current) {
+      await ctx.updateRecipe({ id: draftIdRef.current, ...payload });
     } else {
       await ctx.addRecipe(payload);
-      onSavedRef.current?.();
     }
+    onSavedRef.current?.();
     onBack();
   }, [editingRecipe, buildPayload, ctx]);
 
@@ -204,7 +256,7 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     stepTitle, setStepTitle, stepDesc, setStepDesc,
     stepTimer, setStepTimer,
     stepIngredientPick, setStepIngredientPick,
-    buildPayload, persistEditNow,
+    buildPayload, persistNow,
     commitTag, addIngredient, removeIngredient,
     toggleStepIngredientIndex, addStep, removeStep,
     submit,

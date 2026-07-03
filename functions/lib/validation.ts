@@ -21,6 +21,7 @@ export interface RecipePayload {
   chefNote?: string;
   isHeirloom?: boolean;
   sourceUrl?: string;
+  draft?: boolean;
 }
 
 const DIFFICULTIES = new Set(['Easy', 'Medium', 'Advanced', 'Expert']);
@@ -149,5 +150,6 @@ export function parseRecipePayload(v: unknown): RecipePayload | null {
     chefNote: typeof o.chefNote === 'string' ? o.chefNote : undefined,
     isHeirloom: o.isHeirloom === true,
     sourceUrl: typeof o.sourceUrl === 'string' && o.sourceUrl.trim() ? o.sourceUrl.trim() : undefined,
+    draft: o.draft === true ? true : undefined,
   };
 }
