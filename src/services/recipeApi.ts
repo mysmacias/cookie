@@ -95,8 +95,13 @@ export async function createRecipe(recipe: Omit<Recipe, 'id'>): Promise<Recipe> 
 function applySavedRecipe(saved: Recipe): void {
   if (saved.id.startsWith('user_') || saved.id.startsWith('api_') || saved.id.startsWith('scrape_')) {
     const i = userRecipes.findIndex(r => r.id === saved.id);
-    if (i !== -1) userRecipes[i] = saved;
-    else userRecipes.push(saved);
+    if (i !== -1) {
+      // Form payloads don't carry addedAt; keep the stored value so "Date
+      // added" sorting and draft ordering survive guest-mode updates.
+      userRecipes[i] = { ...saved, addedAt: saved.addedAt ?? userRecipes[i].addedAt };
+    } else {
+      userRecipes.push(saved);
+    }
   } else {
     overrides[saved.id] = saved;
   }

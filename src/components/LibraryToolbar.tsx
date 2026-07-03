@@ -49,6 +49,9 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
 }) => {
   const activeCount = cuisineFilters.length + tagFilters.length;
   const clearAll = () => { clearCuisineFilters(); clearTagFilters(); };
+  // Drafts are a simple newest-first list: sort, facet filters, selection and
+  // export don't apply there, so hide those affordances in that scope.
+  const isDrafts = filter === 'drafts';
 
   return (
     <>
@@ -97,7 +100,7 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
           ))}
         </div>
 
-        {cuisines.length > 0 ? (
+        {!isDrafts && cuisines.length > 0 ? (
           <FilterMenu
             label="Cuisine"
             icon={<Tag size={13} aria-hidden />}
@@ -108,7 +111,7 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
           />
         ) : null}
 
-        {allTags.length > 0 ? (
+        {!isDrafts && allTags.length > 0 ? (
           <FilterMenu
             label="Tags"
             options={allTags}
@@ -119,27 +122,29 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
           />
         ) : null}
 
-        <div className="relative">
-          <ArrowUpDown
-            className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-outline"
-            size={14}
-            strokeWidth={2.25}
-            aria-hidden
-          />
-          <select
-            aria-label="Sort recipes"
-            value={sort}
-            onChange={e => setSort(e.target.value as LibrarySort)}
-            className="appearance-none rounded-full border border-outline-variant bg-surface py-2 pl-9 pr-9 text-xs font-label uppercase tracking-widest text-on-surface shadow-none focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            {SORT_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
+        {!isDrafts ? (
+          <div className="relative">
+            <ArrowUpDown
+              className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-outline"
+              size={14}
+              strokeWidth={2.25}
+              aria-hidden
+            />
+            <select
+              aria-label="Sort recipes"
+              value={sort}
+              onChange={e => setSort(e.target.value as LibrarySort)}
+              className="appearance-none rounded-full border border-outline-variant bg-surface py-2 pl-9 pr-9 text-xs font-label uppercase tracking-widest text-on-surface shadow-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              {SORT_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div className="ml-auto flex flex-wrap items-center gap-3">
-          {!selectionMode ? (
+          {isDrafts ? null : !selectionMode ? (
             <>
               <button
                 type="button"
@@ -218,7 +223,7 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
         </div>
       </div>
 
-      {activeCount > 0 ? (
+      {activeCount > 0 && !isDrafts ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] font-label uppercase tracking-widest text-outline">Filtering by</span>
           {cuisineFilters.map(c => (

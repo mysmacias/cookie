@@ -34,6 +34,16 @@ describe('parseRecipePayload', () => {
       ingredients: [], steps: [],
     })).toBeNull();
   });
+
+  it('keeps the draft flag only when explicitly true', () => {
+    const base = {
+      title: 'X', description: 'x', prepTime: '1', time: '1', category: 'x',
+      difficulty: 'Easy', ingredients: [], steps: [],
+    };
+    expect(parseRecipePayload({ ...base, draft: true })?.draft).toBe(true);
+    expect(parseRecipePayload({ ...base, draft: 'yes' })?.draft).toBeUndefined();
+    expect(parseRecipePayload(base)?.draft).toBeUndefined();
+  });
 });
 
 describe('parseCollectionName', () => {

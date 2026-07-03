@@ -59,7 +59,6 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
   // in-progress recipe as a draft (draft: true) so nothing is lost, then clears
   // the flag when the user finishes. draftIdRef holds the id once created.
   const draftIdRef = useRef<string | null>(null);
-  const creatingDraftRef = useRef(false);
   const isDraftRef = useRef<boolean>(editingRecipe?.draft === true);
   const submittedRef = useRef(false);
 
@@ -107,47 +106,47 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
 
   // Persist the in-progress form. A new recipe is saved as a draft (draft: true)
   // the moment it has a title, then updated in place as the user keeps typing;
-  // editing an existing recipe preserves its current draft status. Publishing
-  // (submit) flips submittedRef so no trailing save can resurrect the draft.
-  const performSave = useCallback(async () => {
-    if (submittedRef.current) return;
-    const snap = formSnapRef.current;
-    if (!snap.payload.title.trim()) return;
-    const keepDraft = isDraftRef.current;
+  // editing an existing recipe preserves its current draft status.
+  //
+  // Saves are serialized through saveChainRef: each save runs after the previous
+  // one settles and reads the form snapshot at execution time. This guarantees
+  // the first save's create finishes before any update (no duplicate drafts),
+  // later saves always persist the latest content (no dropped keystrokes), and
+  // submit can wait out in-flight saves so a stale autosave can never land after
+  // publish and resurrect the draft.
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
-    if (snap.editId) {
-      await ctx.updateRecipe({
-        id: snap.editId,
-        isHeirloom: snap.isHeirloom,
-        ...snap.payload,
-        draft: keepDraft ? true : undefined,
-      });
-      onSavedRef.current?.();
-      return;
-    }
+  const performSave = useCallback((): Promise<void> => {
+    const run = async () => {
+      if (submittedRef.current) return;
+      const snap = formSnapRef.current;
+      if (!snap.payload.title.trim()) return;
+      const keepDraft = isDraftRef.current;
 
-    if (draftIdRef.current) {
-      await ctx.updateRecipe({
-        id: draftIdRef.current,
-        ...snap.payload,
-        draft: keepDraft ? true : undefined,
-      });
+      if (snap.editId) {
+        await ctx.updateRecipe({
+          id: snap.editId,
+          isHeirloom: snap.isHeirloom,
+          ...snap.payload,
+          draft: keepDraft ? true : undefined,
+        });
+      } else if (draftIdRef.current) {
+        await ctx.updateRecipe({
+          id: draftIdRef.current,
+          ...snap.payload,
+          draft: keepDraft ? true : undefined,
+        });
+      } else {
+        // First save of a brand-new recipe: create it as a draft.
+        const created = await ctx.addRecipe({ ...snap.payload, draft: true });
+        draftIdRef.current = created.id;
+        isDraftRef.current = true;
+      }
       onSavedRef.current?.();
-      return;
-    }
-
-    // First save of a brand-new recipe: create it as a draft. The guard stops a
-    // concurrent unmount/back save from creating a second draft.
-    if (creatingDraftRef.current) return;
-    creatingDraftRef.current = true;
-    try {
-      const created = await ctx.addRecipe({ ...snap.payload, draft: true });
-      draftIdRef.current = created.id;
-      isDraftRef.current = true;
-      onSavedRef.current?.();
-    } finally {
-      creatingDraftRef.current = false;
-    }
+    };
+    const chained = saveChainRef.current.then(run, run);
+    saveChainRef.current = chained;
+    return chained;
   }, [ctx]);
 
   // Call the latest performSave from effects/handlers that must not re-run when
@@ -226,9 +225,11 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
   }, []);
 
   const submit = useCallback(async (onBack: () => void) => {
-    // Publishing: stop autosave from re-drafting and clear the draft flag.
+    // Publishing: block queued autosaves, wait for any in-flight save to settle
+    // (so it can't land after us and resurrect the draft), then clear the flag.
     submittedRef.current = true;
     isDraftRef.current = false;
+    await saveChainRef.current.catch(() => { /* publish anyway */ });
     const payload = buildPayload();
     if (editingRecipe) {
       await ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: editingRecipe.isHeirloom, ...payload });

@@ -64,18 +64,23 @@ export default function App() {
 
   useEffect(() => {
     if (!routeRecipeId) return;
-    // Resolve from the published library or, for a draft-edit deep link, drafts.
+    // Resolve from the published library, or from drafts only for edit deep
+    // links — a half-finished draft has no detail/cooking view (it may have no
+    // steps at all), so /recipe/:id for a draft falls through to "not found".
+    const isEditPath = window.location.pathname.endsWith('/edit');
     const recipe = ctx.recipes.find(r => r.id === routeRecipeId)
-      ?? ctx.drafts.find(r => r.id === routeRecipeId);
+      ?? (isEditPath ? ctx.drafts.find(r => r.id === routeRecipeId) : undefined);
     if (!recipe) return;
     setSelectedRecipe(recipe);
-    if (window.location.pathname.endsWith('/edit')) {
+    if (isEditPath) {
       // Keep the same reference while editing the same recipe: autosave refreshes
       // the recipe list, and swapping in a new-but-equal object would re-hydrate
       // the form and bounce the wizard back to step 1.
       setEditingRecipe(prev => (prev && prev.id === recipe.id ? prev : recipe));
     }
-  }, [routeRecipeId, ctx.recipes, ctx.drafts, setSelectedRecipe, setEditingRecipe]);
+    // currentScreen is a dep so back/forward between /recipe/:id and
+    // /recipe/:id/edit re-resolves even though routeRecipeId stays the same.
+  }, [routeRecipeId, currentScreen, ctx.recipes, ctx.drafts, setSelectedRecipe, setEditingRecipe]);
 
   const navigateTo = useCallback((
     screen: Screen,
@@ -163,9 +168,13 @@ export default function App() {
 
   const needsRecipe =
     (currentScreen === 'detail' || currentScreen === 'cooking') && routeRecipeId;
-  const recipeResolved = selectedRecipe ?? (routeRecipeId
+  const resolvedRecipe = selectedRecipe ?? (routeRecipeId
     ? ctx.recipes.find(r => r.id === routeRecipeId) ?? null
     : null);
+  // recipeResolved feeds detail/cooking only — drafts have no view there (they
+  // may have zero steps), so they resolve to "not found" no matter how they
+  // were selected (deep link, stale selection from a prior edit, …).
+  const recipeResolved = resolvedRecipe?.draft ? null : resolvedRecipe;
 
   return (
     <div className="min-h-screen bg-surface selection:bg-primary/20">

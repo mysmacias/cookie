@@ -114,13 +114,23 @@ export function useLibraryFilters() {
   const recipes = ctx.recipes;
   const drafts = ctx.drafts;
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<LibraryScope>('all');
+  const [filter, setFilterState] = useState<LibraryScope>('all');
   const [sort, setSort] = useState<LibrarySort>(savedSort);
   const [gridCols, setGridColsState] = useState(savedGridCols);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Record<string, true>>({});
   const [cuisineFilters, setCuisineFilters] = useState<string[]>([]);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
+
+  // Selection (export / cook-together) only makes sense over published recipes,
+  // so drop any pending selection when switching into the drafts scope.
+  const setFilter = useCallback((v: LibraryScope) => {
+    if (v === 'drafts') {
+      setSelectionMode(false);
+      setSelectedIds({});
+    }
+    setFilterState(v);
+  }, []);
 
   const tierIndexRef = useRef(colsToTierIndex(gridCols));
   const gridContainerRef = useRef<HTMLDivElement>(null);
