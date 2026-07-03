@@ -1,13 +1,14 @@
 import React from 'react';
 import { Plus, Search, SquareCheck, ListX, ArrowUpDown, LayoutGrid, ChefHat, Tag, X } from 'lucide-react';
 import { FilterMenu } from './FilterMenu';
-import { SORT_OPTIONS, type LibrarySort } from '../hooks/useLibraryFilters';
+import { SORT_OPTIONS, type LibrarySort, type LibraryScope } from '../hooks/useLibraryFilters';
 
 interface LibraryToolbarProps {
   searchQuery: string;
   setSearchQuery: (v: string) => void;
-  filter: 'all' | 'bookmarked';
-  setFilter: (v: 'all' | 'bookmarked') => void;
+  filter: LibraryScope;
+  setFilter: (v: LibraryScope) => void;
+  draftCount: number;
   sort: LibrarySort;
   setSort: (v: LibrarySort) => void;
   selectionMode: boolean;
@@ -35,6 +36,7 @@ interface LibraryToolbarProps {
 export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
   searchQuery, setSearchQuery,
   filter, setFilter,
+  draftCount,
   sort, setSort,
   selectionMode, setSelectionMode,
   selectedCount, exitSelectionMode,
@@ -72,7 +74,15 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-full border border-outline-variant p-0.5" role="group" aria-label="Recipe scope">
-          {([['all', 'All'], ['bookmarked', 'Saved']] as const).map(([value, label]) => (
+          {([
+            ['all', 'All'],
+            ['bookmarked', 'Saved'],
+            // Only expose Drafts once one exists (or while viewing them), so the
+            // control stays out of the way for people who never leave a draft.
+            ...(draftCount > 0 || filter === 'drafts'
+              ? [['drafts', draftCount > 0 ? `Drafts · ${draftCount}` : 'Drafts'] as const]
+              : []),
+          ] as const).map(([value, label]) => (
             <button
               key={value}
               type="button"

@@ -10,7 +10,7 @@ import {
   getCachedUserRecipes,
 } from './recipeApi';
 
-export function getAllRecipes(): Recipe[] {
+function getMergedRecipes(): Recipe[] {
   const overrides = getCachedOverrides();
   const bundled = RECIPES.map(r => applyBundledRecipeMedia(overrides[r.id] ?? r));
   const seeded = [...RECIPE_API_SEED_RECIPES, ...MEALDB_SEED_RECIPES]
@@ -25,6 +25,22 @@ export function getAllRecipes(): Recipe[] {
   // Single place every recipe passes through: derive the cuisine facet and
   // mirror the primary cuisine onto `category` for display/sort.
   return [...recipesById.values()].map(normalizeRecipeTaxonomy);
+}
+
+/**
+ * The published library — everything except in-progress drafts. This feeds the
+ * main library, cooking, collections, meal-plan and graph flows, so drafts are
+ * excluded everywhere by construction.
+ */
+export function getAllRecipes(): Recipe[] {
+  return getMergedRecipes().filter(r => !r.draft);
+}
+
+/** In-progress drafts, newest first — surfaced in the Library's Drafts section. */
+export function getDraftRecipes(): Recipe[] {
+  return getMergedRecipes()
+    .filter(r => r.draft)
+    .sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0));
 }
 
 export function isBookmarked(recipeId: string): boolean {

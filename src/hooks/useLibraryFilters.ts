@@ -107,11 +107,14 @@ function recipeMatchesSearch(query: string, r: Recipe): boolean {
   return false;
 }
 
+export type LibraryScope = 'all' | 'bookmarked' | 'drafts';
+
 export function useLibraryFilters() {
   const ctx = useRecipes();
   const recipes = ctx.recipes;
+  const drafts = ctx.drafts;
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'bookmarked'>('all');
+  const [filter, setFilter] = useState<LibraryScope>('all');
   const [sort, setSort] = useState<LibrarySort>(savedSort);
   const [gridCols, setGridColsState] = useState(savedGridCols);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -196,8 +199,13 @@ export function useLibraryFilters() {
     haptic('light');
   }, []);
 
-  const filteredRecipes = useMemo(() =>
-    recipes
+  const filteredRecipes = useMemo(() => {
+    // Drafts are their own scope: newest-first (store order), search-filterable,
+    // and unaffected by cuisine/tag/bookmark facets which drafts rarely carry.
+    if (filter === 'drafts') {
+      return drafts.filter(r => recipeMatchesSearch(searchQuery, r));
+    }
+    return recipes
       .filter(r => recipeMatchesSearch(searchQuery, r))
       .filter(r => filter === 'all' || bookmarkedSet.has(r.id))
       .filter(r => cuisineFilters.length === 0 ||
@@ -206,9 +214,8 @@ export function useLibraryFilters() {
         r.tags?.some(rt => rt.toLowerCase() === t.toLowerCase()),
       ))
       .slice()
-      .sort((a, b) => compareRecipes(a, b, sort)),
-    [recipes, searchQuery, filter, sort, bookmarkedSet, cuisineFilters, tagFilters],
-  );
+      .sort((a, b) => compareRecipes(a, b, sort));
+  }, [recipes, drafts, searchQuery, filter, sort, bookmarkedSet, cuisineFilters, tagFilters]);
 
   const selectedRecipes = useMemo(
     () => filteredRecipes.filter(r => selectedIds[r.id]),
@@ -254,6 +261,7 @@ export function useLibraryFilters() {
     selectionMode, setSelectionMode,
     selectedIds, toggleSelect, exitSelectionMode,
     filteredRecipes, selectedRecipes, selectedCount,
+    draftCount: drafts.length,
     bookmarkedIds, bookmarkedSet, handleToggleBookmark,
     gridContainerRef, gridScale, gridColsClass, gridCols, setGridCols,
     cuisines, cuisineFilters, toggleCuisineFilter, clearCuisineFilters,

@@ -63,14 +63,19 @@ export default function App() {
   const { showOnboarding, dismissOnboarding } = useOnboarding();
 
   useEffect(() => {
-    if (!routeRecipeId || ctx.recipes.length === 0) return;
-    const recipe = ctx.recipes.find(r => r.id === routeRecipeId);
+    if (!routeRecipeId) return;
+    // Resolve from the published library or, for a draft-edit deep link, drafts.
+    const recipe = ctx.recipes.find(r => r.id === routeRecipeId)
+      ?? ctx.drafts.find(r => r.id === routeRecipeId);
     if (!recipe) return;
     setSelectedRecipe(recipe);
     if (window.location.pathname.endsWith('/edit')) {
-      setEditingRecipe(recipe);
+      // Keep the same reference while editing the same recipe: autosave refreshes
+      // the recipe list, and swapping in a new-but-equal object would re-hydrate
+      // the form and bounce the wizard back to step 1.
+      setEditingRecipe(prev => (prev && prev.id === recipe.id ? prev : recipe));
     }
-  }, [routeRecipeId, ctx.recipes, setSelectedRecipe, setEditingRecipe]);
+  }, [routeRecipeId, ctx.recipes, ctx.drafts, setSelectedRecipe, setEditingRecipe]);
 
   const navigateTo = useCallback((
     screen: Screen,
@@ -95,16 +100,17 @@ export default function App() {
   );
 
   const handleAddRecipeBack = useCallback(() => {
-    const wasEditing = editingRecipe !== null;
-    const recipeForDetail = selectedRecipe;
+    const editing = editingRecipe;
     setEditingRecipe(null);
-    if (wasEditing && recipeForDetail) {
-      const fresh = ctx.recipes.find(r => r.id === recipeForDetail.id);
-      navTo('detail', fresh ?? recipeForDetail);
+    // Editing a published recipe returns to its detail page; new recipes and
+    // drafts return to the library (drafts live under the Drafts tab there).
+    if (editing && editing.draft !== true) {
+      const fresh = ctx.recipes.find(r => r.id === editing.id);
+      navTo('detail', fresh ?? editing);
     } else {
       navTo('library');
     }
-  }, [editingRecipe, selectedRecipe, navTo, setEditingRecipe, ctx.recipes]);
+  }, [editingRecipe, navTo, setEditingRecipe, ctx.recipes]);
 
   const handleCookingRecipeSynced = useCallback(() => {
     setSelectedRecipe(prev => {
@@ -200,6 +206,7 @@ export default function App() {
             <LibraryScreen
               navigateTo={navigateTo}
               startCooking={startCooking}
+              onResumeDraft={openEditRecipe}
               onCookTogether={ids => navigateToCookPlan(ids)}
             />
           )}
