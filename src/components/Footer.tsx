@@ -5,6 +5,12 @@ interface FooterProps {
   navigateTo: (screen: Screen) => void;
 }
 
+const FooterLink: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
+  <button type="button" onClick={onClick} className="hover:text-primary transition-colors">
+    {children}
+  </button>
+);
+
 export const Footer: React.FC<FooterProps> = ({ navigateTo }) => {
   return (
     <footer className="border-t border-outline-variant/30 py-20 bg-surface-container-low safe-area-bottom">
@@ -18,18 +24,20 @@ export const Footer: React.FC<FooterProps> = ({ navigateTo }) => {
         <div>
           <h4 className="text-xs font-label uppercase tracking-widest mb-6 opacity-50">Explore</h4>
           <ul className="space-y-4 text-sm">
-            <li><button onClick={() => navigateTo('library')}>Library</button></li>
-            <li><button onClick={() => navigateTo('shopping')}>Shopping list</button></li>
-            <li><button onClick={() => navigateTo('collections')}>Collections</button></li>
-            <li><button onClick={() => navigateTo('exports')}>My books</button></li>
-            <li><button onClick={() => navigateTo('about')}>Our Story</button></li>
-            <li><button onClick={() => navigateTo('add')}>Submit Recipe</button></li>
+            <li><FooterLink onClick={() => navigateTo('library')}>Library</FooterLink></li>
+            <li><FooterLink onClick={() => navigateTo('discover')}>Discover</FooterLink></li>
+            <li><FooterLink onClick={() => navigateTo('meal-plan')}>Meal plan</FooterLink></li>
+            <li><FooterLink onClick={() => navigateTo('shopping')}>Shopping list</FooterLink></li>
+            <li><FooterLink onClick={() => navigateTo('collections')}>Collections</FooterLink></li>
+            <li><FooterLink onClick={() => navigateTo('exports')}>My books</FooterLink></li>
+            <li><FooterLink onClick={() => navigateTo('about')}>Our Story</FooterLink></li>
+            <li><FooterLink onClick={() => navigateTo('add')}>Submit Recipe</FooterLink></li>
           </ul>
         </div>
         <div>
           <h4 className="text-xs font-label uppercase tracking-widest mb-6 opacity-50">Legal</h4>
           <ul className="space-y-4 text-sm">
-            <li><button onClick={() => navigateTo('privacy')}>Privacy</button></li>
+            <li><FooterLink onClick={() => navigateTo('privacy')}>Privacy</FooterLink></li>
           </ul>
         </div>
       </div>

@@ -88,12 +88,30 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
     }).catch(() => {});
   }, [recipe.id]);
 
+  const pendingNotesRef = useRef<{ recipeId: string; patch: { notes?: string; rating?: number | null } } | null>(null);
+
   const persistNotes = useCallback((patch: { notes?: string; rating?: number | null }) => {
     if (notesSaveRef.current) clearTimeout(notesSaveRef.current);
+    pendingNotesRef.current = {
+      recipeId: recipe.id,
+      patch: { ...pendingNotesRef.current?.patch, ...patch },
+    };
     notesSaveRef.current = setTimeout(() => {
-      void saveRecipeNotes(recipe.id, patch).catch(() => showToast('Could not save notes'));
+      const pending = pendingNotesRef.current;
+      pendingNotesRef.current = null;
+      void saveRecipeNotes(recipe.id, pending?.patch ?? patch).catch(() => showToast('Could not save notes'));
     }, 500);
   }, [recipe.id, showToast]);
+
+  // Flush a pending debounced save when leaving the screen so the last edit isn't lost.
+  useEffect(() => () => {
+    if (notesSaveRef.current) clearTimeout(notesSaveRef.current);
+    const pending = pendingNotesRef.current;
+    if (pending) {
+      pendingNotesRef.current = null;
+      void saveRecipeNotes(pending.recipeId, pending.patch).catch(() => {});
+    }
+  }, []);
 
   const handleToggleBookmark = () => {
     void ctx.toggleBookmark(recipe.id);
@@ -347,13 +365,23 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
               <button type="button" aria-label="Add to collection" title="Add to collection" aria-expanded={showCollections} onClick={() => setShowCollections(v => !v)} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
                 <List size={20} />
               </button>
-              {showCollections && collections.length > 0 && (
+              {showCollections && (
                 <div className="absolute right-0 top-full mt-2 min-w-[200px] rounded-xl border border-outline-variant bg-surface shadow-lg z-20 py-1">
                   {collections.map(c => (
                     <button key={c.id} type="button" className="w-full px-4 py-2.5 text-left text-sm hover:bg-surface-container" onClick={() => void addToCollection(c.id)}>
                       {c.name}
                     </button>
                   ))}
+                  {collections.length === 0 && (
+                    <p className="px-4 py-2.5 text-sm text-on-surface-variant">No collections yet.</p>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full px-4 py-2.5 text-left text-sm text-primary hover:bg-surface-container border-t border-outline-variant/30"
+                    onClick={() => navigateTo('collections')}
+                  >
+                    {collections.length === 0 ? 'Create a collection' : 'Manage collections'}
+                  </button>
                 </div>
               )}
             </div>

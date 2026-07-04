@@ -104,8 +104,13 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
   }, [stepIndex]);
 
   const confirmExit = useCallback(() => {
+    // Nothing to lose on the first step with no timer running — exit directly.
+    if (stepIndex === 0 && !timer.isStarted) {
+      onExit();
+      return;
+    }
     setConfirmExitOpen(true);
-  }, []);
+  }, [stepIndex, timer.isStarted, onExit]);
 
   const finishCooking = useCallback(async () => {
     void haptic('success');
@@ -410,7 +415,6 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
                   <button
                     type="button"
                     onClick={handleTimerPress}
-                    disabled={timer.isComplete}
                     className={`${timer.isComplete ? 'bg-secondary' : 'bg-primary'} text-on-primary px-8 py-3 rounded-full font-label uppercase tracking-widest text-xs font-bold min-h-[44px]`}
                   >
                     {timer.buttonLabel}

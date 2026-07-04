@@ -182,16 +182,22 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
           </h3>
           <ArrowRight className="opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary" size={20} />
         </div>
-        <div className="flex items-center space-x-4 text-xs font-label uppercase tracking-widest text-on-surface-variant">
-          <span className="flex items-center space-x-1">
-            <Clock size={12} />
-            <span>{recipe.time}</span>
-          </span>
-          <span className="flex items-center space-x-1">
-            <Flame size={12} />
-            <span>{recipe.difficulty}</span>
-          </span>
-        </div>
+        {(recipe.time || recipe.difficulty) && (
+          <div className="flex items-center space-x-4 text-xs font-label uppercase tracking-widest text-on-surface-variant">
+            {recipe.time && (
+              <span className="flex items-center space-x-1">
+                <Clock size={12} />
+                <span>{recipe.time}</span>
+              </span>
+            )}
+            {recipe.difficulty && (
+              <span className="flex items-center space-x-1">
+                <Flame size={12} />
+                <span>{recipe.difficulty}</span>
+              </span>
+            )}
+          </div>
+        )}
         {recipe.tags && recipe.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1.5 pt-1">
             {recipe.tags.slice(0, 4).map((t, i) => (
