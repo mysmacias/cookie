@@ -40,6 +40,20 @@ const SOURCES = [
   { domain: 'www.loveandlemons.com', sitemapIndex: 'https://www.loveandlemons.com/sitemap.xml' },
   { domain: 'www.budgetbytes.com', sitemapIndex: 'https://www.budgetbytes.com/sitemap_index.xml' },
   { domain: 'sallysbakingaddiction.com', sitemapIndex: 'https://sallysbakingaddiction.com/sitemap_index.xml' },
+  // Regional/international sources (verified schema.org Recipe JSON-LD + images):
+  { domain: 'www.vegrecipesofindia.com', sitemapIndex: 'https://www.vegrecipesofindia.com/sitemap_index.xml' }, // Indian
+  { domain: 'omnivorescookbook.com', sitemapIndex: 'https://omnivorescookbook.com/sitemap_index.xml' }, // Chinese
+  { domain: 'www.chinasichuanfood.com', sitemapIndex: 'https://www.chinasichuanfood.com/wp-sitemap.xml' }, // Chinese (Sichuan)
+  // justonecookbook.com dropped: Cloudflare challenge blocks bot sitemap fetches.
+  { domain: 'sudachirecipes.com', sitemapIndex: 'https://sudachirecipes.com/sitemap_index.xml' }, // Japanese
+  { domain: 'www.chopstickchronicles.com', sitemapIndex: 'https://www.chopstickchronicles.com/sitemap_index.xml' }, // Japanese
+  { domain: 'japanesecooking101.com', sitemapIndex: 'https://japanesecooking101.com/sitemap.xml' }, // Japanese
+  { domain: 'www.koreanbapsang.com', sitemapIndex: 'https://www.koreanbapsang.com/sitemap_index.xml' }, // Korean
+  { domain: 'hot-thai-kitchen.com', sitemapIndex: 'https://hot-thai-kitchen.com/sitemap_index.xml' }, // Thai
+  { domain: 'www.isabeleats.com', sitemapIndex: 'https://www.isabeleats.com/sitemap_index.xml' }, // Mexican
+  { domain: 'www.themediterraneandish.com', sitemapIndex: 'https://www.themediterraneandish.com/sitemap_index.xml' }, // Mediterranean/Middle Eastern
+  { domain: 'www.mygreekdish.com', sitemapIndex: 'https://www.mygreekdish.com/sitemap_index.xml' }, // Greek
+  { domain: 'www.africanbites.com', sitemapIndex: 'https://www.africanbites.com/sitemap_index.xml' }, // African
 ];
 
 // Obvious non-recipe post paths to skip before fetching (saves wasted requests).
