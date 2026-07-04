@@ -123,6 +123,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
 
               <nav aria-label="Main" className="flex-1 overflow-y-auto px-6 py-8 flex flex-col space-y-6 text-xl font-headline italic">
                 <NavButton label="The Library" screen="library" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
+                <NavButton label="Discover" screen="discover" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
                 <NavButton label="Graph" screen="graph" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
                 <NavButton label="Cook plan" screen="cook-plan" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
                 <NavButton label="Shopping list" screen="shopping" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
