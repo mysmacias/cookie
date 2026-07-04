@@ -68,8 +68,17 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
     if (lib.searchQuery.trim()) {
       return 'No recipes match your search. Try a different term or clear the filter.';
     }
-    return 'Your library is empty. Add a recipe or discover new ones.';
+    return 'Your library is empty. Add your own recipe, or discover new ones to save here.';
   };
+
+  // Only the pristine "you have nothing yet" state gets call-to-action buttons —
+  // filtered/search/bookmark/draft empties are about the current view, not onboarding.
+  const showGettingStarted =
+    !isDrafts &&
+    lib.filter !== 'bookmarked' &&
+    lib.cuisineFilters.length === 0 &&
+    lib.tagFilters.length === 0 &&
+    !lib.searchQuery.trim();
 
   return (
     <motion.div key="library" {...motionProps} className="space-y-12">
@@ -129,6 +138,24 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
             <BookOpen className="mx-auto text-outline-variant" size={40} strokeWidth={1.25} />
           )}
           <p className="text-on-surface-variant text-lg max-w-md mx-auto">{emptyMessage()}</p>
+          {showGettingStarted && (
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => navigateTo('add')}
+                className="inline-flex items-center gap-2 rounded-full bg-primary text-on-primary px-6 py-3 text-xs font-label uppercase tracking-widest font-bold hover:bg-primary-container transition-colors"
+              >
+                Add a recipe
+              </button>
+              <button
+                type="button"
+                onClick={() => navigateTo('discover')}
+                className="inline-flex items-center gap-2 rounded-full border border-outline-variant px-6 py-3 text-xs font-label uppercase tracking-widest hover:border-primary transition-colors"
+              >
+                Discover recipes
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <motion.div
