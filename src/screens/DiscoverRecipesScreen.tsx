@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Download, Globe, Loader2, Search, Sparkles } from 'lucide-react';
+import { ArrowLeft, BookOpen, Download, Globe, Loader2, Search, Sparkles } from 'lucide-react';
 import type { Recipe } from '../types';
 import { Screen } from '../hooks/useNavigation';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
@@ -18,13 +18,19 @@ import {
   searchWebRecipes,
   type WebRecipeSearchResult,
 } from '../services/recipeScrape';
+import {
+  getImportedCatalogIds,
+  importCatalogRecipe,
+  searchCatalog,
+  type CatalogPreview,
+} from '../services/catalogApi';
 import { useToast } from '../components/ui/Toast';
 
 interface DiscoverRecipesScreenProps {
   navigateTo: (screen: Screen, recipe?: Recipe) => void;
 }
 
-type DiscoverTab = 'api' | 'web';
+type DiscoverTab = 'collection' | 'api' | 'web';
 
 function formatMinutes(mins: number): string {
   if (!mins) return '';
@@ -46,23 +52,26 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
   const { recipes, refreshRecipes } = useRecipes();
   const { showToast } = useToast();
 
-  const [tab, setTab] = useState<DiscoverTab>('web');
+  const [tab, setTab] = useState<DiscoverTab>('collection');
   const [query, setQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [page, setPage] = useState(1);
   const [apiResults, setApiResults] = useState<RecipeApiPreview[]>([]);
   const [webResults, setWebResults] = useState<WebRecipeSearchResult[]>([]);
+  const [catalogResults, setCatalogResults] = useState<CatalogPreview[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [webHasMore, setWebHasMore] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [importingApiId, setImportingApiId] = useState<number | null>(null);
   const [importingUrl, setImportingUrl] = useState<string | null>(null);
+  const [importingCatalogId, setImportingCatalogId] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const importedApiIds = useMemo(() => getImportedApiExternalIds(recipes), [recipes]);
   const importedUrls = useMemo(() => getImportedScrapeUrls(recipes), [recipes]);
+  const importedCatalogIds = useMemo(() => getImportedCatalogIds(recipes), [recipes]);
 
   const runApiSearch = useCallback(async (q: string, p: number) => {
     setIsSearching(true);
@@ -105,13 +114,31 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
     }
   }, []);
 
+  const runCatalogSearch = useCallback(async (q: string, p: number) => {
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const res = await searchCatalog({ q: q || undefined, page: p, per_page: 12 });
+      setCatalogResults(res.data);
+      setTotalPages(res.meta.last_page);
+      setTotal(res.meta.total);
+    } catch (e) {
+      setCatalogResults([]);
+      setSearchError(e instanceof Error ? e.message : 'Search failed.');
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (tab === 'api') {
+    if (tab === 'collection') {
+      void runCatalogSearch(query, page);
+    } else if (tab === 'api') {
       void runApiSearch(query, page);
     } else {
       void runWebSearch(query, page);
     }
-  }, [tab, query, page, runApiSearch, runWebSearch]);
+  }, [tab, query, page, runApiSearch, runWebSearch, runCatalogSearch]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,6 +183,26 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
       showToast(e instanceof Error ? e.message : 'Import failed.');
     } finally {
       setImportingUrl(null);
+    }
+  };
+
+  const handleCatalogImport = async (preview: CatalogPreview) => {
+    if (importedCatalogIds.has(preview.id)) {
+      const existing = recipes.find(r => r.id === preview.id);
+      if (existing) navigateTo('detail', existing);
+      return;
+    }
+
+    setImportingCatalogId(preview.id);
+    try {
+      const recipe = await importCatalogRecipe(preview.id);
+      await refreshRecipes();
+      showToast(`"${recipe.title}" added to your library.`);
+      navigateTo('detail', recipe);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Import failed.');
+    } finally {
+      setImportingCatalogId(null);
     }
   };
 
@@ -213,12 +260,26 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
             <h1 className="text-5xl md:text-7xl font-headline italic leading-none">Discover</h1>
           </div>
           <p className="text-on-surface-variant max-w-xl text-lg">
-            Search the web for recipes on blogs and cooking sites, or browse Recipe API — then save any dish to your library with the source link preserved.
+            Browse the Cookie collection — thousands of recipes from cuisines around the world — search the web, or explore Recipe API. Save any dish to your library with the source link preserved.
           </p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Discover sources">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'collection'}
+          onClick={() => switchTab('collection')}
+          className={
+            tab === 'collection'
+              ? 'flex items-center gap-2 rounded-full bg-primary text-on-primary px-5 py-2.5 text-xs font-label uppercase tracking-widest font-bold'
+              : 'flex items-center gap-2 rounded-full border border-outline-variant px-5 py-2.5 text-xs font-label uppercase tracking-widest'
+          }
+        >
+          <BookOpen size={14} />
+          Cookie collection
+        </button>
         <button
           type="button"
           role="tab"
@@ -272,8 +333,20 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-outline" size={20} />
         <input
           type="search"
-          placeholder={tab === 'web' ? 'Search the web for recipes…' : 'Search by name, cuisine, ingredient…'}
-          aria-label={tab === 'web' ? 'Search the web for recipes' : 'Search Recipe API'}
+          placeholder={
+            tab === 'collection'
+              ? 'Search the collection by name, cuisine, ingredient…'
+              : tab === 'web'
+                ? 'Search the web for recipes…'
+                : 'Search by name, cuisine, ingredient…'
+          }
+          aria-label={
+            tab === 'collection'
+              ? 'Search the Cookie collection'
+              : tab === 'web'
+                ? 'Search the web for recipes'
+                : 'Search Recipe API'
+          }
           className="w-full pl-12 pr-28 py-4 bg-surface-container rounded-full border-none focus:ring-2 focus:ring-primary/20 transition-all"
           value={searchInput}
           onChange={e => setSearchInput(e.target.value)}
@@ -292,7 +365,19 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
         </div>
       ) : null}
 
-      {tab === 'api' ? (
+      {tab === 'collection' ? (
+        <CatalogResults
+          results={catalogResults}
+          isSearching={isSearching}
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          importedIds={importedCatalogIds}
+          importingId={importingCatalogId}
+          onImport={handleCatalogImport}
+          onPageChange={setPage}
+        />
+      ) : tab === 'api' ? (
         <ApiResults
           results={apiResults}
           isSearching={isSearching}
@@ -321,6 +406,84 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
     </SwipeBackWrapper>
   );
 };
+
+interface CatalogResultsProps {
+  results: CatalogPreview[];
+  isSearching: boolean;
+  page: number;
+  totalPages: number;
+  total: number;
+  importedIds: Set<string>;
+  importingId: string | null;
+  onImport: (preview: CatalogPreview) => void;
+  onPageChange: (page: number) => void;
+}
+
+function CatalogResults({
+  results,
+  isSearching,
+  page,
+  totalPages,
+  total,
+  importedIds,
+  importingId,
+  onImport,
+  onPageChange,
+}: CatalogResultsProps) {
+  if (isSearching && results.length === 0) {
+    return <LoadingState />;
+  }
+  if (results.length === 0) {
+    return <EmptyState />;
+  }
+
+  return (
+    <>
+      <p className="text-sm text-on-surface-variant font-label uppercase tracking-widest">
+        {total.toLocaleString()} recipes · page {page} of {totalPages}
+      </p>
+      <div className="grid gap-6 md:grid-cols-2">
+        {results.map(preview => {
+          const imported = importedIds.has(preview.id);
+          const isImporting = importingId === preview.id;
+
+          return (
+            <article
+              key={preview.id}
+              className="rounded-2xl border border-outline-variant/40 bg-surface-container-low/40 p-6 flex flex-col gap-4"
+            >
+              {preview.image ? (
+                <img
+                  src={preview.image}
+                  alt=""
+                  className="h-40 w-full rounded-xl object-cover"
+                  loading="lazy"
+                />
+              ) : null}
+              <div className="space-y-2">
+                <h2 className="text-2xl font-headline italic leading-tight">{preview.title}</h2>
+                <p className="text-on-surface-variant line-clamp-2">{preview.description}</p>
+                {preview.sourceDomain ? (
+                  <p className="text-xs font-label uppercase tracking-widest text-secondary">{preview.sourceDomain}</p>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs font-label uppercase tracking-widest text-on-surface-variant">
+                {preview.category ? (
+                  <span className="rounded-full border border-outline-variant/50 px-3 py-1">{preview.category}</span>
+                ) : null}
+                {preview.time ? (
+                  <span className="rounded-full border border-outline-variant/50 px-3 py-1">{preview.time}</span>
+                ) : null}
+              </div>
+              <ImportButton imported={imported} isImporting={isImporting} onClick={() => void onImport(preview)} />
+            </article>
+          );
+        })}
+      </div>
+      <Pagination page={page} totalPages={totalPages} isSearching={isSearching} onPageChange={onPageChange} />
+    </>
+  );
+}
 
 interface ApiResultsProps {
   results: RecipeApiPreview[];

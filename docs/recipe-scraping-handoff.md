@@ -4,19 +4,31 @@ This document lets a fresh agent pick up the recipe-scraping pipeline and grow
 the database beyond its current size. Read it top to bottom before running
 anything.
 
-## Current state (as of the last run)
+## Current state (as of the last run, 2026-07-04)
 
-- **`data/recipes.json`** — the recipe database. Currently **1000** unique
+- **`data/recipes.json`** — the recipe database. Currently **3302** unique
   recipes, each with a remote image URL and passing the quality gate
   (≥3 ingredients, ≥2 steps). Deduped by canonical source URL.
+  Image URLs spot-checked (stratified HEAD sample per source): all resolve.
 - **`data/scrape-state.json`** — resume state: the discovered URL `pool`
-  (~6,700 URLs) and the `seen` set of already-attempted URLs. The crawler reads
-  this to avoid re-fetching.
-- **D1** — both the local and remote (`cookie-db`) databases have been seeded:
+  (~16,000 URLs across 16 domains) and the `seen` set of already-attempted
+  URLs. The crawler reads this to avoid re-fetching.
+- **D1** — seeded from the **old 1000-recipe run**; NOT yet re-seeded with the
+  3302-recipe dataset (see "Re-seed D1 after the crawl" below):
   - global `recipes` catalog table (migration `0005_recipes_catalog.sql`): 1000 rows.
   - `user_recipes` for `mysmacias@gmail.com` (remote only): 1000 rows with `scrape_` ids.
-- Source mix so far: budgetbytes ~360, sallysbakingaddiction ~386,
-  recipetineats ~249, loveandlemons ~6 (that site rate-limited the bot mid-run).
+- Regional mix: Chinese 14% (omnivorescookbook + chinasichuanfood), American
+  23% (budgetbytes + sallysbakingaddiction), Japanese 9% (sudachirecipes +
+  chopstickchronicles + japanesecooking101), Australian/Western 8%
+  (recipetineats), and ~6–7% each of African (africanbites), Mediterranean/
+  Middle-East (themediterraneandish), Indian (vegrecipesofindia), Greek
+  (mygreekdish), Korean (koreanbapsang), Mexican (isabeleats), Thai
+  (hot-thai-kitchen).
+- Meal types: mains 26%, dessert 19%, appetizer/snack 11%, breakfast 8%,
+  side 7%, soup 5%, salad 4%, plus sauces, drinks and breads.
+- Sites that did NOT work: justonecookbook.com (Cloudflare challenge on
+  sitemap fetches from bots), maangchi.com (403), hungryhuy.com (no schema.org
+  Recipe JSON-LD), Dotdash Meredith sites (HTTP 402).
 
 ## The pipeline (files)
 
