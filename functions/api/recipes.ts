@@ -1,6 +1,6 @@
 import type { Env } from '../lib/env';
 import { generateId, requireUser } from '../lib/auth';
-import { upsertUserRecipe } from '../lib/db';
+import { isUserOwnedRecipeId, upsertUserRecipe } from '../lib/db';
 import { checkRateLimit } from '../lib/rateLimit';
 import { error, json } from '../lib/response';
 import { parseRecipePayload } from '../lib/validation';
@@ -24,7 +24,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (copyFrom) {
     let source: Record<string, unknown> | null = null;
-    if (copyFrom.startsWith('user_') || copyFrom.startsWith('api_') || copyFrom.startsWith('scrape_')) {
+    if (isUserOwnedRecipeId(copyFrom)) {
       const row = await env.DB.prepare(
         'SELECT data FROM user_recipes WHERE user_id = ? AND id = ?',
       ).bind(userOrResponse.id, copyFrom).first<{ data: string }>();
