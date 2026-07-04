@@ -109,11 +109,18 @@ export const RecipeFormReview: React.FC<RecipeFormReviewProps> = ({
       </div>
     )}
 
-    <div className="flex items-center gap-4 pt-4">
-      <Button variant="outline" onClick={onBack}>Back</Button>
-      <Button variant="primary" size="lg" onClick={onSubmit} className="flex-1">
-        {isEdit && !isDraft ? 'Save changes' : 'Submit recipe'}
-      </Button>
+    <div className="space-y-3 pt-4">
+      {!(isEdit && !isDraft) && (
+        <p className="text-sm text-on-surface-variant text-center">
+          Looking delicious. One tap and it joins your library.
+        </p>
+      )}
+      <div className="flex items-center gap-4">
+        <Button variant="outline" onClick={onBack}>Back</Button>
+        <Button variant="primary" size="lg" onClick={onSubmit} className="flex-1">
+          {isEdit && !isDraft ? 'Save changes' : 'Add to my library'}
+        </Button>
+      </div>
     </div>
   </motion.div>
 );

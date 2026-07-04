@@ -337,6 +337,7 @@ export default function App() {
               editingRecipe={editingRecipe}
               onBack={handleAddRecipeBack}
               onSaved={ctx.refreshRecipes}
+              onAddAnother={() => navigateTo('add')}
             />
           )}
 
