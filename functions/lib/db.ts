@@ -1,5 +1,12 @@
 import type { Env } from './env';
 
+// Recipes the user created or imported live in user_recipes and carry a
+// generated id with one of these prefixes. Anything else is a bundled
+// catalog recipe id, and user edits to it go to recipe_overrides.
+export function isUserOwnedRecipeId(id: string): boolean {
+  return id.startsWith('user_') || id.startsWith('api_') || id.startsWith('scrape_');
+}
+
 export interface UserDataPayload {
   userRecipes: unknown[];
   overrides: Record<string, unknown>;

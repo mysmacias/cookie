@@ -19,8 +19,7 @@ import {
   type WebRecipeSearchResult,
 } from '../services/recipeScrape';
 import {
-  getImportedCatalogIds,
-  importCatalogRecipe,
+  importRecipeFromCatalog,
   searchCatalog,
   type CatalogPreview,
 } from '../services/catalogApi';
@@ -30,7 +29,7 @@ interface DiscoverRecipesScreenProps {
   navigateTo: (screen: Screen, recipe?: Recipe) => void;
 }
 
-type DiscoverTab = 'collection' | 'api' | 'web';
+type DiscoverTab = 'catalog' | 'api' | 'web';
 
 function formatMinutes(mins: number): string {
   if (!mins) return '';
@@ -52,26 +51,46 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
   const { recipes, refreshRecipes } = useRecipes();
   const { showToast } = useToast();
 
-  const [tab, setTab] = useState<DiscoverTab>('collection');
+  const [tab, setTab] = useState<DiscoverTab>('catalog');
   const [query, setQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [page, setPage] = useState(1);
+  const [catalogResults, setCatalogResults] = useState<CatalogPreview[]>([]);
   const [apiResults, setApiResults] = useState<RecipeApiPreview[]>([]);
   const [webResults, setWebResults] = useState<WebRecipeSearchResult[]>([]);
-  const [catalogResults, setCatalogResults] = useState<CatalogPreview[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [webHasMore, setWebHasMore] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [importingCatalogId, setImportingCatalogId] = useState<string | null>(null);
   const [importingApiId, setImportingApiId] = useState<number | null>(null);
   const [importingUrl, setImportingUrl] = useState<string | null>(null);
-  const [importingCatalogId, setImportingCatalogId] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const importedApiIds = useMemo(() => getImportedApiExternalIds(recipes), [recipes]);
   const importedUrls = useMemo(() => getImportedScrapeUrls(recipes), [recipes]);
-  const importedCatalogIds = useMemo(() => getImportedCatalogIds(recipes), [recipes]);
+  const libraryIds = useMemo(() => new Set(recipes.map(r => r.id)), [recipes]);
+
+  const runCatalogSearch = useCallback(async (q: string, p: number) => {
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const res = await searchCatalog({
+        q: q || undefined,
+        page: p,
+        per_page: 10,
+      });
+      setCatalogResults(res.data);
+      setTotalPages(res.meta.last_page);
+      setTotal(res.meta.total);
+    } catch (e) {
+      setCatalogResults([]);
+      setSearchError(e instanceof Error ? e.message : 'Search failed.');
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
 
   const runApiSearch = useCallback(async (q: string, p: number) => {
     setIsSearching(true);
@@ -114,36 +133,40 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
     }
   }, []);
 
-  const runCatalogSearch = useCallback(async (q: string, p: number) => {
-    setIsSearching(true);
-    setSearchError(null);
-    try {
-      const res = await searchCatalog({ q: q || undefined, page: p, per_page: 12 });
-      setCatalogResults(res.data);
-      setTotalPages(res.meta.last_page);
-      setTotal(res.meta.total);
-    } catch (e) {
-      setCatalogResults([]);
-      setSearchError(e instanceof Error ? e.message : 'Search failed.');
-    } finally {
-      setIsSearching(false);
-    }
-  }, []);
-
   useEffect(() => {
-    if (tab === 'collection') {
+    if (tab === 'catalog') {
       void runCatalogSearch(query, page);
     } else if (tab === 'api') {
       void runApiSearch(query, page);
     } else {
       void runWebSearch(query, page);
     }
-  }, [tab, query, page, runApiSearch, runWebSearch, runCatalogSearch]);
+  }, [tab, query, page, runCatalogSearch, runApiSearch, runWebSearch]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
     setQuery(searchInput.trim());
+  };
+
+  const handleCatalogImport = async (preview: CatalogPreview) => {
+    if (libraryIds.has(preview.id)) {
+      const existing = recipes.find(r => r.id === preview.id);
+      if (existing) navigateTo('detail', existing);
+      return;
+    }
+
+    setImportingCatalogId(preview.id);
+    try {
+      const recipe = await importRecipeFromCatalog(preview.id);
+      await refreshRecipes();
+      showToast(`"${recipe.title}" added to your library.`);
+      navigateTo('detail', recipe);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Import failed.');
+    } finally {
+      setImportingCatalogId(null);
+    }
   };
 
   const handleApiImport = async (preview: RecipeApiPreview) => {
@@ -183,26 +206,6 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
       showToast(e instanceof Error ? e.message : 'Import failed.');
     } finally {
       setImportingUrl(null);
-    }
-  };
-
-  const handleCatalogImport = async (preview: CatalogPreview) => {
-    if (importedCatalogIds.has(preview.id)) {
-      const existing = recipes.find(r => r.id === preview.id);
-      if (existing) navigateTo('detail', existing);
-      return;
-    }
-
-    setImportingCatalogId(preview.id);
-    try {
-      const recipe = await importCatalogRecipe(preview.id);
-      await refreshRecipes();
-      showToast(`"${recipe.title}" added to your library.`);
-      navigateTo('detail', recipe);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Import failed.');
-    } finally {
-      setImportingCatalogId(null);
     }
   };
 
@@ -260,7 +263,7 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
             <h1 className="text-5xl md:text-7xl font-headline italic leading-none">Discover</h1>
           </div>
           <p className="text-on-surface-variant max-w-xl text-lg">
-            Browse the Cookie collection — thousands of recipes from cuisines around the world — search the web, or explore Recipe API. Save any dish to your library with the source link preserved.
+            Browse the Cookie collection, search the web, or explore Recipe API — then save any dish to your library with the source link preserved.
           </p>
         </div>
       </div>
@@ -269,10 +272,10 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'collection'}
-          onClick={() => switchTab('collection')}
+          aria-selected={tab === 'catalog'}
+          onClick={() => switchTab('catalog')}
           className={
-            tab === 'collection'
+            tab === 'catalog'
               ? 'flex items-center gap-2 rounded-full bg-primary text-on-primary px-5 py-2.5 text-xs font-label uppercase tracking-widest font-bold'
               : 'flex items-center gap-2 rounded-full border border-outline-variant px-5 py-2.5 text-xs font-label uppercase tracking-widest'
           }
@@ -334,14 +337,14 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
         <input
           type="search"
           placeholder={
-            tab === 'collection'
-              ? 'Search the collection by name, cuisine, ingredient…'
+            tab === 'catalog'
+              ? 'Search our collection by name, tag, ingredient…'
               : tab === 'web'
                 ? 'Search the web for recipes…'
                 : 'Search by name, cuisine, ingredient…'
           }
           aria-label={
-            tab === 'collection'
+            tab === 'catalog'
               ? 'Search the Cookie collection'
               : tab === 'web'
                 ? 'Search the web for recipes'
@@ -365,14 +368,14 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
         </div>
       ) : null}
 
-      {tab === 'collection' ? (
+      {tab === 'catalog' ? (
         <CatalogResults
           results={catalogResults}
           isSearching={isSearching}
           page={page}
           totalPages={totalPages}
           total={total}
-          importedIds={importedCatalogIds}
+          libraryIds={libraryIds}
           importingId={importingCatalogId}
           onImport={handleCatalogImport}
           onPageChange={setPage}
@@ -413,7 +416,7 @@ interface CatalogResultsProps {
   page: number;
   totalPages: number;
   total: number;
-  importedIds: Set<string>;
+  libraryIds: Set<string>;
   importingId: string | null;
   onImport: (preview: CatalogPreview) => void;
   onPageChange: (page: number) => void;
@@ -425,7 +428,7 @@ function CatalogResults({
   page,
   totalPages,
   total,
-  importedIds,
+  libraryIds,
   importingId,
   onImport,
   onPageChange,
@@ -444,7 +447,7 @@ function CatalogResults({
       </p>
       <div className="grid gap-6 md:grid-cols-2">
         {results.map(preview => {
-          const imported = importedIds.has(preview.id);
+          const imported = libraryIds.has(preview.id);
           const isImporting = importingId === preview.id;
 
           return (
@@ -471,7 +474,10 @@ function CatalogResults({
                 {preview.category ? (
                   <span className="rounded-full border border-outline-variant/50 px-3 py-1">{preview.category}</span>
                 ) : null}
-                {preview.time ? (
+                {preview.difficulty ? (
+                  <span className="rounded-full border border-outline-variant/50 px-3 py-1">{preview.difficulty}</span>
+                ) : null}
+                {preview.time && preview.time !== '—' ? (
                   <span className="rounded-full border border-outline-variant/50 px-3 py-1">{preview.time}</span>
                 ) : null}
               </div>

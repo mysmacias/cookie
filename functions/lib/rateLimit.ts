@@ -20,25 +20,20 @@ export async function checkRateLimit(
 ): Promise<{ ok: true } | { ok: false; retryAfterSec: number }> {
   await pruneRateLimits(env);
   const now = Date.now();
+  // Single atomic upsert: resets the window if it has lapsed, otherwise
+  // increments — concurrent requests can't both read a stale count.
   const row = await env.DB.prepare(
-    'SELECT count, window_start FROM rate_limits WHERE key = ?',
-  ).bind(key).first<{ count: number; window_start: number }>();
+    `INSERT INTO rate_limits (key, count, window_start) VALUES (?1, 1, ?2)
+     ON CONFLICT(key) DO UPDATE SET
+       count = CASE WHEN ?2 - rate_limits.window_start > ?3 THEN 1 ELSE rate_limits.count + 1 END,
+       window_start = CASE WHEN ?2 - rate_limits.window_start > ?3 THEN ?2 ELSE rate_limits.window_start END
+     RETURNING count, window_start`,
+  ).bind(key, now, WINDOW_MS).first<{ count: number; window_start: number }>();
 
-  if (!row || now - row.window_start > WINDOW_MS) {
-    await env.DB.prepare(
-      'INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = 1, window_start = excluded.window_start',
-    ).bind(key, now).run();
-    return { ok: true };
-  }
-
-  if (row.count >= max) {
-    const retryAfterSec = Math.ceil((WINDOW_MS - (now - row.window_start)) / 1000);
+  if (row && row.count > max) {
+    const retryAfterSec = Math.max(1, Math.ceil((WINDOW_MS - (now - row.window_start)) / 1000));
     return { ok: false, retryAfterSec };
   }
-
-  await env.DB.prepare(
-    'UPDATE rate_limits SET count = count + 1 WHERE key = ?',
-  ).bind(key).run();
   return { ok: true };
 }
 

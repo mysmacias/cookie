@@ -1,6 +1,6 @@
 import type { Env } from '../../lib/env';
 import { requireUser } from '../../lib/auth';
-import { upsertOverride, upsertUserRecipe } from '../../lib/db';
+import { isUserOwnedRecipeId, upsertOverride, upsertUserRecipe } from '../../lib/db';
 import { collectMediaKeysFromRecipe, deleteMediaKeys } from '../../lib/media';
 import { error, json } from '../../lib/response';
 import { parseRecipePayload } from '../../lib/validation';
@@ -24,7 +24,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     return error('Invalid recipe data.', 400, 'invalid_recipe');
   }
 
-  if (recipeId.startsWith('user_') || recipeId.startsWith('api_') || recipeId.startsWith('scrape_')) {
+  if (isUserOwnedRecipeId(recipeId)) {
     const existing = await env.DB.prepare(
       'SELECT data FROM user_recipes WHERE user_id = ? AND id = ?',
     ).bind(userOrResponse.id, recipeId).first<{ data: string }>();
@@ -53,7 +53,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
 
   const mediaKeys: string[] = [];
 
-  if (recipeId.startsWith('user_') || recipeId.startsWith('api_') || recipeId.startsWith('scrape_')) {
+  if (isUserOwnedRecipeId(recipeId)) {
     const existing = await env.DB.prepare(
       'SELECT data FROM user_recipes WHERE user_id = ? AND id = ?',
     ).bind(userOrResponse.id, recipeId).first<{ data: string }>();
