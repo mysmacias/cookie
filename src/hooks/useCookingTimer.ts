@@ -88,7 +88,10 @@ export function useCookingTimer(stepIndex: number, onComplete?: () => void) {
   }, []);
 
   const toggle = (timerSeconds: number) => {
-    if (!isStarted) start(timerSeconds);
+    if (!isStarted || isComplete) {
+      firedRef.current = false;
+      start(timerSeconds);
+    }
     else if (running) pause();
     else if (remaining !== null && remaining > 0) resume();
   };
@@ -96,7 +99,7 @@ export function useCookingTimer(stepIndex: number, onComplete?: () => void) {
   const buttonLabel = !isStarted
     ? 'Start Timer'
     : running ? 'Pause'
-    : isComplete ? 'Timer Complete!'
+    : isComplete ? 'Restart Timer'
     : 'Resume';
 
   const dashOffset = !isStarted

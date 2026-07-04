@@ -46,6 +46,11 @@ export const MealPlanScreen: React.FC<MealPlanScreenProps> = ({ navigateTo }) =>
   const [saving, setSaving] = useState(false);
 
   const week = useMemo(() => weekDates(weekStart), [weekStart]);
+  // Derived through the same weekDates path so it matches the rendered keys exactly.
+  const todayIso = useMemo(
+    () => weekDates(startOfWeek(new Date()))[(new Date().getDay() + 6) % 7],
+    [],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,9 +160,22 @@ export const MealPlanScreen: React.FC<MealPlanScreenProps> = ({ navigateTo }) =>
           {week.map(date => {
             const ids = dayMap.get(date) ?? [];
             const dayRecipes = ids.map(id => ctx.recipes.find(r => r.id === id)).filter((r): r is Recipe => !!r);
+            const isToday = date === todayIso;
             return (
-              <section key={date} className="rounded-2xl border border-outline-variant/30 p-5 space-y-4">
-                <h2 className="font-headline italic text-2xl">{formatDayLabel(date)}</h2>
+              <section
+                key={date}
+                className={`rounded-2xl border p-5 space-y-4 ${
+                  isToday ? 'border-primary/50 bg-primary/5' : 'border-outline-variant/30'
+                }`}
+              >
+                <h2 className="font-headline italic text-2xl flex items-center gap-3">
+                  {formatDayLabel(date)}
+                  {isToday && (
+                    <span className="text-[10px] font-label not-italic uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-full">
+                      Today
+                    </span>
+                  )}
+                </h2>
                 {dayRecipes.length > 0 ? (
                   <ul className="space-y-2">
                     {dayRecipes.map(recipe => (

@@ -7,6 +7,7 @@ import {
   buildShoppingItemsFromRecipes,
   createManualShoppingItem,
   groupItemsByAisle,
+  mergeShoppingItems,
   shoppingListToMarkdown,
   type ShoppingItem,
 } from '../utils/shoppingList';
@@ -53,8 +54,15 @@ export const ShoppingListScreen: React.FC<ShoppingListScreenProps> = ({ navigate
 
   const generateFromLibrary = () => {
     const generated = buildShoppingItemsFromRecipes(ctx.recipes);
-    void persist(generated);
-    showToast(`Added ${generated.length} items from your library`);
+    if (generated.length === 0) {
+      showToast('No ingredients found in your library');
+      return;
+    }
+    // Merge so manual items and checked-off state survive regeneration.
+    const merged = mergeShoppingItems(items, generated);
+    void persist(merged);
+    const added = merged.length - items.length;
+    showToast(added > 0 ? `Added ${added} new item${added === 1 ? '' : 's'} from your library` : 'Shopping list is already up to date');
   };
 
   const toggleItem = (id: string) => {

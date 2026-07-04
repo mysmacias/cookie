@@ -149,6 +149,12 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
     setQuery(searchInput.trim());
   };
 
+  // Paging happens from the bottom of the results — bring the new page into view.
+  const changePage = useCallback((p: number) => {
+    setPage(p);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, []);
+
   const handleCatalogImport = async (preview: CatalogPreview) => {
     if (libraryIds.has(preview.id)) {
       const existing = recipes.find(r => r.id === preview.id);
@@ -378,7 +384,7 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
           libraryIds={libraryIds}
           importingId={importingCatalogId}
           onImport={handleCatalogImport}
-          onPageChange={setPage}
+          onPageChange={changePage}
         />
       ) : tab === 'api' ? (
         <ApiResults
@@ -390,7 +396,7 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
           importedIds={importedApiIds}
           importingId={importingApiId}
           onImport={handleApiImport}
-          onPageChange={setPage}
+          onPageChange={changePage}
         />
       ) : (
         <WebResults
@@ -402,7 +408,7 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
           importedUrls={importedUrls}
           importingUrl={importingUrl}
           onImport={handleWebImport}
-          onPageChange={setPage}
+          onPageChange={changePage}
         />
       )}
     </motion.div>
@@ -465,7 +471,10 @@ function CatalogResults({
               ) : null}
               <div className="space-y-2">
                 <h2 className="text-2xl font-headline italic leading-tight">{preview.title}</h2>
-                <p className="text-on-surface-variant line-clamp-2">{preview.description}</p>
+                {/* Skip boilerplate "Imported from x.com." descriptions — the domain badge below already says it. */}
+                {preview.description && !/^imported from /i.test(preview.description.trim()) ? (
+                  <p className="text-on-surface-variant line-clamp-2">{preview.description}</p>
+                ) : null}
                 {preview.sourceDomain ? (
                   <p className="text-xs font-label uppercase tracking-widest text-secondary">{preview.sourceDomain}</p>
                 ) : null}
@@ -592,7 +601,7 @@ function WebResults({
     return <LoadingState />;
   }
   if (results.length === 0) {
-    return <EmptyState />;
+    return <EmptyState message="No recipes found. Try a different search term, or paste a recipe URL above to import it directly." />;
   }
 
   return (
@@ -674,10 +683,10 @@ function LoadingState() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ message = 'No recipes found. Try a different search term.' }: { message?: string }) {
   return (
     <div className="rounded-2xl border border-outline-variant/40 bg-surface-container-low/50 p-12 text-center">
-      <p className="text-on-surface-variant text-lg">No recipes found. Try a different search term or paste a recipe URL above.</p>
+      <p className="text-on-surface-variant text-lg">{message}</p>
     </div>
   );
 }
