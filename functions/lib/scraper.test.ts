@@ -60,6 +60,33 @@ describe('scraper JSON-LD extraction', () => {
     expect(parseIngredientString('salt')).toEqual({ amount: '', name: 'salt' });
   });
 
+  it('strips Budget Bytes price annotations from ingredients', () => {
+    expect(parseIngredientString('2 cups all-purpose flour ($0.30)')).toEqual({
+      amount: '2 cups',
+      name: 'all-purpose flour',
+    });
+    expect(parseIngredientString('water ($0.00)')).toEqual({ amount: '', name: 'water' });
+    expect(parseIngredientString('1 cup cheddar (shredded, $1.10)')).toEqual({
+      amount: '1 cup',
+      name: 'cheddar (shredded)',
+    });
+    expect(parseIngredientString('1 large pizza dough ($0.30*)')).toEqual({
+      amount: '1',
+      name: 'large pizza dough',
+    });
+    expect(parseIngredientString('1 lb. chopped fresh kale (6 cups) ($1.15)')).toEqual({
+      amount: '1',
+      name: 'lb. chopped fresh kale (6 cups)',
+    });
+  });
+
+  it('cleans WP Recipe Maker leading-comma notes', () => {
+    expect(parseIngredientString('2 garlic cloves (, minced)')).toEqual({
+      amount: '2',
+      name: 'garlic cloves (minced)',
+    });
+  });
+
   it('parses instructions', () => {
     const steps = parseSchemaInstructions([
       { text: 'Step one' },

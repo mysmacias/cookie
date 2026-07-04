@@ -95,8 +95,25 @@ export function resolveSchemaImage(image) {
   return '';
 }
 
+// Publisher quirks: Budget Bytes appends per-item costs ("flour ($0.30)",
+// "cheddar (shredded, $1.10)") and WP Recipe Maker sites emit notes with a
+// stray leading comma ("garlic cloves (, minced)"). Drop the noise, keep
+// any real descriptor.
+export function cleanIngredientText(text) {
+  return String(text)
+    .replace(/\(([^)]*?)[\s,]*\$\d+(?:\.\d+)?\s*\*{0,3}\)/g, (_, desc) => {
+      const kept = desc.trim();
+      return kept ? `(${kept})` : '';
+    })
+    .replace(/\(\s*,\s*/g, '(')
+    .replace(/\s*,\s*\)/g, ')')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export function parseIngredientString(raw) {
-  const trimmed = String(raw).trim();
+  const trimmed = cleanIngredientText(raw);
   if (!trimmed) return { name: '', amount: '' };
   const match = trimmed.match(
     /^([\d./¼-¾⅐-⅞\s]+(?:\s*(?:cup|cups|c|tbsp|tablespoons?|tsp|teaspoons?|oz|ounce|ounces|g|gram|grams|kg|ml|l|liter|litre|lb|lbs|pound|pounds|pinch|dash|clove|cloves|can|cans|package|packages|stick|sticks|slice|slices|piece|pieces|head|bunch|sprig|sprigs)?s?)?)\s+(.+)$/i,
