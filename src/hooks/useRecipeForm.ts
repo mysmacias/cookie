@@ -189,7 +189,7 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
   }, [tagInput, tags]);
 
   const addIngredient = useCallback(() => {
-    if (!ingName.trim() || !ingAmount.trim()) return;
+    if (!ingName.trim()) return;
     const row: Ingredient = { name: ingName.trim(), amount: ingAmount.trim() };
     const img = ingImage.trim();
     if (img) row.image = img;
@@ -199,9 +199,26 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     setIngImage('');
   }, [ingName, ingAmount, ingImage]);
 
+  const addIngredientsBulk = useCallback((rows: Ingredient[]) => {
+    const clean = rows.filter(r => r.name.trim());
+    if (clean.length === 0) return;
+    setIngredients(prev => [...prev, ...clean]);
+  }, []);
+
   const removeIngredient = useCallback((idx: number) => {
     setIngredients(prev => prev.filter((_, i) => i !== idx));
   }, []);
+
+  // Pop an existing row back into the entry fields so typos are fixable
+  // without retyping the whole line.
+  const editIngredient = useCallback((idx: number) => {
+    const ing = ingredients[idx];
+    if (!ing) return;
+    setIngName(ing.name);
+    setIngAmount(ing.amount);
+    setIngImage(ing.image || '');
+    setIngredients(prev => prev.filter((_, i) => i !== idx));
+  }, [ingredients]);
 
   const toggleStepIngredientIndex = useCallback((idx: number) => {
     setStepIngredientPick(prev =>
@@ -210,11 +227,19 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
   }, []);
 
   const addStep = useCallback(() => {
-    if (!stepTitle.trim() || !stepDesc.trim()) return;
-    const newStep: Step = { title: stepTitle.trim(), description: stepDesc.trim() };
-    if (stepTimer && Number(stepTimer) > 0) newStep.timer = Number(stepTimer) * 60;
-    if (stepIngredientPick.length > 0) newStep.ingredientIndices = [...stepIngredientPick];
-    setSteps(prev => [...prev, newStep]);
+    if (!stepDesc.trim()) return;
+    const timer = stepTimer && Number(stepTimer) > 0 ? Number(stepTimer) * 60 : undefined;
+    const picks = stepIngredientPick.length > 0 ? [...stepIngredientPick] : undefined;
+    setSteps(prev => {
+      // Untitled steps get a friendly default so the title field never blocks flow.
+      const newStep: Step = {
+        title: stepTitle.trim() || `Step ${prev.length + 1}`,
+        description: stepDesc.trim(),
+      };
+      if (timer) newStep.timer = timer;
+      if (picks) newStep.ingredientIndices = picks;
+      return [...prev, newStep];
+    });
     setStepTitle('');
     setStepDesc('');
     setStepTimer('');
@@ -223,6 +248,58 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
 
   const removeStep = useCallback((idx: number) => {
     setSteps(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const moveStep = useCallback((idx: number, dir: -1 | 1) => {
+    setSteps(prev => {
+      const j = idx + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[j]] = [next[j], next[idx]];
+      return next;
+    });
+  }, []);
+
+  const editStep = useCallback((idx: number) => {
+    const s = steps[idx];
+    if (!s) return;
+    setStepTitle(s.title);
+    setStepDesc(s.description);
+    setStepTimer(s.timer ? String(Math.round(s.timer / 60)) : '');
+    setStepIngredientPick(s.ingredientIndices ? [...s.ingredientIndices] : []);
+    setSteps(prev => prev.filter((_, i) => i !== idx));
+  }, [steps]);
+
+  // Clear everything for a fresh recipe after "Add another" — including the
+  // draft bookkeeping, so the next autosave creates a brand-new draft instead
+  // of touching the recipe that was just published.
+  const resetForNew = useCallback(() => {
+    setTitle('');
+    setDescription('');
+    setPrepTime('');
+    setTimeDisplay('');
+    setBakeTime('');
+    setYields('');
+    setHeroImage('');
+    setDifficulty('Easy');
+    setCategory('');
+    setTags([]);
+    setTagInput('');
+    setChefNote('');
+    setIngredients([]);
+    setIngName('');
+    setIngAmount('');
+    setIngImage('');
+    setSteps([]);
+    setStepTitle('');
+    setStepDesc('');
+    setStepTimer('');
+    setStepIngredientPick([]);
+    setWizardStep(1);
+    draftIdRef.current = null;
+    isDraftRef.current = false;
+    submittedRef.current = false;
+    skipAutosaveUntil.current = Date.now() + 350;
   }, []);
 
   const submit = useCallback(async (onBack: () => void) => {
@@ -256,9 +333,9 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     stepTitle, setStepTitle, stepDesc, setStepDesc,
     stepTimer, setStepTimer,
     stepIngredientPick, setStepIngredientPick,
-    buildPayload, persistNow,
-    commitTag, addIngredient, removeIngredient,
-    toggleStepIngredientIndex, addStep, removeStep,
+    buildPayload, persistNow, resetForNew,
+    commitTag, addIngredient, addIngredientsBulk, removeIngredient, editIngredient,
+    toggleStepIngredientIndex, addStep, removeStep, moveStep, editStep,
     submit,
     isEdit: Boolean(editingRecipe),
   };

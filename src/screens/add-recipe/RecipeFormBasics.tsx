@@ -1,8 +1,8 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { motion } from 'motion/react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { scanRecipeFromImage, RecipeScanError } from '../../services/recipeScan';
 import type { ScanRecipeFromImageResult } from '../../services/recipeScan';
-import { X, ImagePlus, ScanLine } from 'lucide-react';
+import { X, ImagePlus, ScanLine, ChevronDown } from 'lucide-react';
 import type { Ingredient, Step, Recipe } from '../../types';
 import { fileToDataUrl } from '../../utils/fileHelpers';
 import { Input, Textarea } from '../../components/ui/Input';
@@ -41,6 +41,16 @@ export const RecipeFormBasics: React.FC<RecipeFormBasicsProps> = ({
   const scanFileRef = useRef<HTMLInputElement>(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // The optional-details section starts collapsed to keep step 1 light, but
+  // pops open the moment it has content (edit hydration, a scan, a draft).
+  const hasDetails = Boolean(
+    timeDisplay || bakeTime || yields || category || tags.length > 0 || chefNote,
+  );
+  useEffect(() => {
+    if (hasDetails) setDetailsOpen(true);
+  }, [hasDetails]);
 
   const applyScanResult = useCallback((result: ScanRecipeFromImageResult) => {
     const r = result.recipe;
@@ -102,13 +112,14 @@ export const RecipeFormBasics: React.FC<RecipeFormBasicsProps> = ({
       key="step1"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="space-y-8 bg-surface-container p-10 rounded-2xl border border-outline-variant/30"
+      className="space-y-8 bg-surface-container p-6 sm:p-10 rounded-2xl border border-outline-variant/30"
     >
       <div className="rounded-xl border border-primary/25 bg-primary/5 p-6 space-y-4">
         <div>
-          <Label className="opacity-70">Scan recipe</Label>
+          <Label className="opacity-70">In a hurry?</Label>
           <p className="text-sm text-on-surface-variant mt-1">
-            Snap or upload a photo of a recipe and we'll read the text and fill this form for you.
+            Snap or upload a photo of a recipe — a card, a cookbook page, a screenshot — and
+            we'll read it and fill this whole form for you.
           </p>
         </div>
         {scanError ? (
@@ -136,12 +147,45 @@ export const RecipeFormBasics: React.FC<RecipeFormBasicsProps> = ({
       <div className="space-y-2">
         <Label as="label" htmlFor="recipe-title">Recipe Title</Label>
         <Input id="recipe-title" placeholder="e.g. Grandma's Famous Shortbread" value={title} onChange={e => setTitle(e.target.value)} />
+        <p className="text-xs text-on-surface-variant">
+          A title is all it takes — we save your draft automatically from here on.
+        </p>
       </div>
       <div className="space-y-2">
         <Label as="label" htmlFor="recipe-description">Description</Label>
         <Textarea id="recipe-description" className="h-32" placeholder="Tell us the story behind this dish..." value={description} onChange={e => setDescription(e.target.value)} />
       </div>
-      <div className="grid grid-cols-2 gap-8">
+      <div className="space-y-3">
+        <Label as="label">Photo</Label>
+        <div className="flex flex-wrap items-start gap-4">
+          {heroImage ? (
+            <div className="relative w-40 aspect-[4/5] rounded-xl overflow-hidden border border-outline-variant/30 bg-surface-container">
+              <img src={heroImage} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <button
+                type="button"
+                onClick={() => setHeroImage('')}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-surface/90 text-on-surface shadow-sm"
+                aria-label="Remove image"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : null}
+          <div className="flex-1 min-w-[200px] space-y-3">
+            <Input
+              type="url"
+              placeholder="Paste an image URL, or upload below"
+              value={heroImage.startsWith('data:') ? '' : heroImage}
+              onChange={e => setHeroImage(e.target.value)}
+            />
+            <input ref={heroFileRef} type="file" accept="image/*" className="hidden" onChange={handleHeroFile} />
+            <Button variant="outline" size="sm" onClick={() => heroFileRef.current?.click()} icon={<ImagePlus size={16} />}>
+              Upload photo
+            </Button>
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:gap-8">
         <div className="space-y-2">
           <Label as="label" htmlFor="recipe-prep-time">Prep Time</Label>
           <Input id="recipe-prep-time" placeholder="20 mins" value={prepTime} onChange={e => setPrepTime(e.target.value)} />
@@ -161,87 +205,100 @@ export const RecipeFormBasics: React.FC<RecipeFormBasicsProps> = ({
           </select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-8">
-        <div className="space-y-2">
-          <Label as="label">Total Time (card)</Label>
-          <Input placeholder="e.g. 45 mins" value={timeDisplay} onChange={e => setTimeDisplay(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label as="label">Bake Time (optional)</Label>
-          <Input placeholder="e.g. 10 mins" value={bakeTime} onChange={e => setBakeTime(e.target.value)} />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label as="label">Yields (optional)</Label>
-        <Input placeholder="e.g. 24 cookies" value={yields} onChange={e => setYields(e.target.value)} />
-      </div>
-      <div className="space-y-3">
-        <Label as="label">Hero image</Label>
-        <Input
-          type="url"
-          placeholder="Image URL, or use upload below"
-          value={heroImage.startsWith('data:') ? '' : heroImage}
-          onChange={e => setHeroImage(e.target.value)}
-        />
-        <input ref={heroFileRef} type="file" accept="image/*" className="hidden" onChange={handleHeroFile} />
-        <Button variant="outline" size="sm" onClick={() => heroFileRef.current?.click()} icon={<ImagePlus size={16} />}>
-          Upload photo
-        </Button>
-        {heroImage ? (
-          <div className="relative w-40 aspect-[4/5] rounded-xl overflow-hidden border border-outline-variant/30 bg-surface-container">
-            <img src={heroImage} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            <button
-              type="button"
-              onClick={() => setHeroImage('')}
-              className="absolute top-2 right-2 p-1.5 rounded-full bg-surface/90 text-on-surface shadow-sm"
-              aria-label="Remove image"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ) : null}
-      </div>
-      <div className="space-y-2">
-        <Label as="label">Category</Label>
-        <Input placeholder="e.g. Dessert, Bread, Main Course" value={category} onChange={e => setCategory(e.target.value)} />
-      </div>
-      <div className="space-y-3">
-        <div>
-          <Label as="label">Tags</Label>
-          <p className="text-xs text-on-surface-variant mt-1">
-            Helps discover this recipe in search — try <em className="not-italic">weeknight</em>,{' '}
-            <em className="not-italic">vegan</em>, <em className="not-italic">gluten-free</em>, etc.
-          </p>
-        </div>
-        {tags.length > 0 ? (
-          <ul className="flex flex-wrap gap-2">
-            {tags.map((t, i) => (
-              <li key={`${t}-${i}`} className="inline-flex items-center gap-1.5 pl-3 pr-1 py-1 rounded-full bg-primary/10 text-primary text-xs font-label uppercase tracking-wider">
-                {t}
-                <button type="button" onClick={() => setTags(tags.filter((_, idx) => idx !== i))} className="p-1 rounded-full hover:bg-primary/20" aria-label={`Remove tag ${t}`}>
-                  <X size={12} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <div className="flex gap-3">
-          <Input
-            className="flex-1"
-            placeholder="Add a tag, press Enter"
-            value={tagInput}
-            onChange={e => setTagInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitTag(); } }}
+
+      <div className="border-t border-outline-variant/30 pt-6">
+        <button
+          type="button"
+          onClick={() => setDetailsOpen(o => !o)}
+          aria-expanded={detailsOpen}
+          className="flex w-full items-center justify-between text-left"
+        >
+          <span>
+            <Label className="opacity-70">More details</Label>
+            <span className="block text-sm text-on-surface-variant mt-1">
+              Category, tags, times, yields, chef's note — all optional, all skippable.
+            </span>
+          </span>
+          <ChevronDown
+            size={18}
+            aria-hidden
+            className={`shrink-0 text-on-surface-variant transition-transform ${detailsOpen ? 'rotate-180' : ''}`}
           />
-          <Button variant="outline" size="sm" pill={false} onClick={commitTag}>Add</Button>
-        </div>
+        </button>
+
+        <AnimatePresence initial={false}>
+          {detailsOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
+            >
+              <div className="space-y-8 pt-8">
+                <div className="grid grid-cols-2 gap-4 sm:gap-8">
+                  <div className="space-y-2">
+                    <Label as="label">Total Time (card)</Label>
+                    <Input placeholder="e.g. 45 mins" value={timeDisplay} onChange={e => setTimeDisplay(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label as="label">Bake Time</Label>
+                    <Input placeholder="e.g. 10 mins" value={bakeTime} onChange={e => setBakeTime(e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 sm:gap-8">
+                  <div className="space-y-2">
+                    <Label as="label">Yields</Label>
+                    <Input placeholder="e.g. 24 cookies" value={yields} onChange={e => setYields(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label as="label">Category</Label>
+                    <Input placeholder="e.g. Dessert, Bread" value={category} onChange={e => setCategory(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <Label as="label">Tags</Label>
+                    <p className="text-xs text-on-surface-variant mt-1">
+                      Helps discover this recipe in search — try <em className="not-italic">weeknight</em>,{' '}
+                      <em className="not-italic">vegan</em>, <em className="not-italic">gluten-free</em>, etc.
+                    </p>
+                  </div>
+                  {tags.length > 0 ? (
+                    <ul className="flex flex-wrap gap-2">
+                      {tags.map((t, i) => (
+                        <li key={`${t}-${i}`} className="inline-flex items-center gap-1.5 pl-3 pr-1 py-1 rounded-full bg-primary/10 text-primary text-xs font-label uppercase tracking-wider">
+                          {t}
+                          <button type="button" onClick={() => setTags(tags.filter((_, idx) => idx !== i))} className="p-1 rounded-full hover:bg-primary/20" aria-label={`Remove tag ${t}`}>
+                            <X size={12} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <div className="flex gap-3">
+                    <Input
+                      className="flex-1"
+                      placeholder="Add a tag, press Enter"
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitTag(); } }}
+                    />
+                    <Button variant="outline" size="sm" pill={false} onClick={commitTag}>Add</Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label as="label">Chef's Note</Label>
+                  <Textarea className="h-24" placeholder="Any tips or secrets..." value={chefNote} onChange={e => setChefNote(e.target.value)} />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-      <div className="space-y-2">
-        <Label as="label">Chef's Note (optional)</Label>
-        <Textarea className="h-24" placeholder="Any tips or secrets..." value={chefNote} onChange={e => setChefNote(e.target.value)} />
-      </div>
+
       <Button variant="primary" size="lg" disabled={!title.trim()} onClick={onNext} className="w-full">
-        Continue to Ingredients
+        {title.trim() ? 'Continue to Ingredients' : 'Name your recipe to continue'}
       </Button>
     </motion.form>
   );

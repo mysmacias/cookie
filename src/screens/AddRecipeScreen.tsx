@@ -1,38 +1,85 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft } from 'lucide-react';
 import type { Recipe } from '../types';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
-import { Label } from '../components/ui/Label';
 import { useRecipeForm } from '../hooks/useRecipeForm';
+import { WizardStepper } from './add-recipe/WizardStepper';
 import { RecipeFormBasics } from './add-recipe/RecipeFormBasics';
 import { RecipeFormIngredients } from './add-recipe/RecipeFormIngredients';
 import { RecipeFormSteps } from './add-recipe/RecipeFormSteps';
 import { RecipeFormReview } from './add-recipe/RecipeFormReview';
+import { RecipeFormSuccess } from './add-recipe/RecipeFormSuccess';
 
 interface AddRecipeScreenProps {
   onBack: () => void;
   editingRecipe?: Recipe | null;
   onSaved?: () => void;
+  /** Called from the success screen so the app can clear editing state for a fresh recipe. */
+  onAddAnother?: () => void;
 }
 
-export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editingRecipe, onSaved }) => {
+export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editingRecipe, onSaved, onAddAnother }) => {
   const form = useRecipeForm(editingRecipe, onSaved);
   // A resumed draft is technically "editing" an existing record, but to the cook
   // it's still the new recipe they started — so it gets its own framing.
   const isDraft = editingRecipe?.draft === true;
+  const isPublishedEdit = form.isEdit && !isDraft;
+  // Snapshot for the celebration screen; form state resets on "Add another".
+  const [celebrated, setCelebrated] = useState<{ title: string; heroImage: string } | null>(null);
 
   const handleBack = () => {
     form.persistNow();
     onBack();
   };
 
+  // Steps already visited stay reachable; jumping ahead needs the same
+  // prerequisites as the Continue buttons (title → ingredients → steps).
+  const canGo = (step: number) => {
+    if (step <= form.wizardStep) return true;
+    if (step >= 2 && !form.title.trim()) return false;
+    if (step >= 3 && form.ingredients.length === 0) return false;
+    if (step >= 4 && form.steps.length === 0) return false;
+    return true;
+  };
+
+  const handleSubmit = () => {
+    void form.submit(() => {
+      if (isPublishedEdit) {
+        // Edits of a published recipe just return to its detail page — no fanfare.
+        onBack();
+      } else {
+        setCelebrated({ title: form.title.trim(), heroImage: form.heroImage });
+      }
+    });
+  };
+
+  const handleAddAnother = () => {
+    setCelebrated(null);
+    form.resetForNew();
+    onAddAnother?.();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
+  if (celebrated) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-3xl mx-auto pt-8">
+        <RecipeFormSuccess
+          title={celebrated.title}
+          heroImage={celebrated.heroImage}
+          onAddAnother={handleAddAnother}
+          onDone={onBack}
+        />
+      </motion.div>
+    );
+  }
+
   return (
     <SwipeBackWrapper onBack={handleBack}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-3xl mx-auto space-y-12"
+        className="max-w-3xl mx-auto space-y-10"
       >
         <button
           type="button"
@@ -56,7 +103,7 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
           </p>
         </div>
 
-        <Label>Step {form.wizardStep} of 4</Label>
+        <WizardStepper current={form.wizardStep} canGo={canGo} onSelect={form.setWizardStep} />
 
         {form.wizardStep === 1 && (
           <RecipeFormBasics
@@ -86,7 +133,9 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
             ingAmount={form.ingAmount} setIngAmount={form.setIngAmount}
             ingImage={form.ingImage} setIngImage={form.setIngImage}
             addIngredient={form.addIngredient}
+            addIngredientsBulk={form.addIngredientsBulk}
             removeIngredient={form.removeIngredient}
+            editIngredient={form.editIngredient}
             onBack={() => form.setWizardStep(1)}
             onNext={() => form.setWizardStep(3)}
           />
@@ -103,6 +152,8 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
             toggleStepIngredientIndex={form.toggleStepIngredientIndex}
             addStep={form.addStep}
             removeStep={form.removeStep}
+            moveStep={form.moveStep}
+            editStep={form.editStep}
             onBack={() => form.setWizardStep(2)}
             onNext={() => form.setWizardStep(4)}
           />
@@ -125,7 +176,7 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
             isEdit={form.isEdit}
             isDraft={isDraft}
             onBack={() => form.setWizardStep(3)}
-            onSubmit={() => void form.submit(onBack)}
+            onSubmit={handleSubmit}
           />
         )}
       </motion.div>
