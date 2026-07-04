@@ -1,4 +1,5 @@
 import type { Env, AuthUser } from './env';
+import { pruneExpiredRows } from './maintenance';
 
 const SESSION_COOKIE = 'cookie_session';
 const SESSION_DAYS = 30;
@@ -65,6 +66,7 @@ function getSessionToken(request: Request): string | null {
 }
 
 export async function createSession(env: Env, userId: string): Promise<{ token: string; expiresAt: number }> {
+  await pruneExpiredRows(env);
   const token = generateId();
   const now = Date.now();
   const expiresAt = now + SESSION_DAYS * 24 * 60 * 60 * 1000;
