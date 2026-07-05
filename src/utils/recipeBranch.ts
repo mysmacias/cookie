@@ -166,6 +166,80 @@ export function diffRecipes(base: Recipe, branch: Recipe): RecipeDiff {
 }
 
 /**
+ * A one-line digest of a diff for compact rows: the first couple of changes
+ * joined with dots, plus a "+n more" tail. Empty string for an empty diff.
+ */
+export function summarizeDiff(diff: RecipeDiff, max = 2): string {
+  const parts: string[] = [];
+  for (const c of diff.changedIngredients) parts.push(`~ ${c.name} ${c.from} → ${c.to}`);
+  for (const i of diff.addedIngredients) parts.push(`+ ${i.name}`);
+  for (const i of diff.removedIngredients) parts.push(`− ${i.name}`);
+  for (const s of diff.changedSteps) parts.push(`~ ${s.title}`);
+  for (const s of diff.addedSteps) parts.push(`+ ${s.title}`);
+  for (const s of diff.removedSteps) parts.push(`− ${s.title}`);
+  for (const m of diff.changedMeta) parts.push(`~ ${m.label} ${m.from} → ${m.to}`);
+  if (parts.length === 0) return '';
+  const shown = parts.slice(0, max);
+  const rest = parts.length - shown.length;
+  return rest > 0 ? `${shown.join(' · ')} · +${rest} more` : shown.join(' · ');
+}
+
+/** One library card: a family root plus how many variations hang off it. */
+export interface LibraryFamily {
+  root: Recipe;
+  variationCount: number;
+}
+
+/**
+ * Collapse a filtered, sorted list of recipes into one entry per family, in
+ * the order families first appear. Each entry carries the family root (the
+ * card that represents the family) and the number of descendants across
+ * `all` — which should include drafts so unpublished branches are counted.
+ */
+export function collapseToFamilies(visible: Recipe[], all: Recipe[]): LibraryFamily[] {
+  const byId = new Map(all.map(r => [r.id, r]));
+  const childrenOf = new Map<string, Recipe[]>();
+  for (const r of all) {
+    if (!r.parentId || !byId.has(r.parentId)) continue;
+    const siblings = childrenOf.get(r.parentId);
+    if (siblings) siblings.push(r);
+    else childrenOf.set(r.parentId, [r]);
+  }
+
+  const rootOf = (recipe: Recipe): Recipe => {
+    let current = recipe;
+    const visited = new Set<string>([current.id]);
+    while (current.parentId) {
+      const parent = byId.get(current.parentId);
+      if (!parent || visited.has(parent.id)) break;
+      visited.add(parent.id);
+      current = parent;
+    }
+    return current;
+  };
+
+  const countDescendants = (id: string, visited: Set<string>): number => {
+    let count = 0;
+    for (const child of childrenOf.get(id) ?? []) {
+      if (visited.has(child.id)) continue;
+      visited.add(child.id);
+      count += 1 + countDescendants(child.id, visited);
+    }
+    return count;
+  };
+
+  const families: LibraryFamily[] = [];
+  const seenRoots = new Set<string>();
+  for (const recipe of visible) {
+    const root = rootOf(recipe);
+    if (seenRoots.has(root.id)) continue;
+    seenRoots.add(root.id);
+    families.push({ root, variationCount: countDescendants(root.id, new Set([root.id])) });
+  }
+  return families;
+}
+
+/**
  * The payload for a new branch of `source`: a full copy pointing back at its
  * parent, created as a draft so an abandoned branch never clutters the library
  * (it surfaces in Drafts, and publishing through the wizard clears the flag).

@@ -4,6 +4,7 @@ import { usePinch } from '@use-gesture/react';
 import { haptic } from '../utils/haptics';
 import type { Recipe } from '../types';
 import { useRecipes } from '../context/RecipeContext';
+import { collapseToFamilies } from '../utils/recipeBranch';
 
 const GRID_KEY = 'cookie_grid_cols';
 const SORT_KEY = 'cookie_library_sort';
@@ -217,9 +218,22 @@ export function useLibraryFilters() {
       .sort((a, b) => compareRecipes(a, b, sort));
   }, [recipes, drafts, searchQuery, filter, sort, bookmarkedSet, cuisineFilters, tagFilters]);
 
+  // One card per family: branches collapse into their root, which surfaces
+  // whenever any member (root or branch) survives the filters. Drafts are
+  // included in the pool so unpublished branches still count as variations.
+  const libraryFamilies = useMemo(() => {
+    if (filter === 'drafts') return [];
+    return collapseToFamilies(filteredRecipes, [...recipes, ...drafts]);
+  }, [filter, filteredRecipes, recipes, drafts]);
+
+  const visibleRecipes = useMemo(
+    () => (filter === 'drafts' ? filteredRecipes : libraryFamilies.map(f => f.root)),
+    [filter, filteredRecipes, libraryFamilies],
+  );
+
   const selectedRecipes = useMemo(
-    () => filteredRecipes.filter(r => selectedIds[r.id]),
-    [filteredRecipes, selectedIds],
+    () => visibleRecipes.filter(r => selectedIds[r.id]),
+    [visibleRecipes, selectedIds],
   );
   const selectedCount = selectedRecipes.length;
 
@@ -260,7 +274,7 @@ export function useLibraryFilters() {
     sort, setAndPersistSort,
     selectionMode, setSelectionMode,
     selectedIds, toggleSelect, exitSelectionMode,
-    filteredRecipes, selectedRecipes, selectedCount,
+    filteredRecipes, libraryFamilies, selectedRecipes, selectedCount,
     draftCount: drafts.length,
     bookmarkedIds, bookmarkedSet, handleToggleBookmark,
     gridContainerRef, gridScale, gridColsClass, gridCols, setGridCols,

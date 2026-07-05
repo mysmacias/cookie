@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { BookOpen, Search, FileEdit } from 'lucide-react';
 import { Recipe } from '../types';
@@ -8,6 +8,8 @@ import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
 import { ExportRecipeModal } from '../components/ExportRecipeModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LibraryToolbar } from '../components/LibraryToolbar';
+import { VariationsSheet } from '../components/VariationsSheet';
+import { BranchDialog } from '../components/BranchDialog';
 import { Screen } from '../hooks/useNavigation';
 import { useLibraryFilters } from '../hooks/useLibraryFilters';
 import { useToast } from '../components/ui/Toast';
@@ -25,13 +27,36 @@ interface LibraryScreenProps {
 export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startCooking, onResumeDraft, onCookTogether, onOpenGraph }) => {
   const lib = useLibraryFilters();
   const { showToast } = useToast();
-  const { isLoading, deleteRecipe } = useRecipes();
+  const ctx = useRecipes();
+  const { isLoading, deleteRecipe } = ctx;
   const reducedMotion = useReducedMotion();
   const [exportOpen, setExportOpen] = useState(false);
   const [exportRecipes, setExportRecipes] = useState<Recipe[]>([]);
   const [draftToDiscard, setDraftToDiscard] = useState<Recipe | null>(null);
+  const [familyRoot, setFamilyRoot] = useState<Recipe | null>(null);
+  const [branchSource, setBranchSource] = useState<Recipe | null>(null);
+  const [branching, setBranching] = useState(false);
 
   const isDrafts = lib.filter === 'drafts';
+
+  // Drafts included so unpublished branches appear in the variations sheet.
+  const allWithDrafts = useMemo(() => [...ctx.recipes, ...ctx.drafts], [ctx.recipes, ctx.drafts]);
+
+  const handleCreateBranch = async (name: string, note: string) => {
+    if (!branchSource) return;
+    setBranching(true);
+    try {
+      const branch = await ctx.branchRecipe(branchSource, { branchName: name, branchNote: note || undefined });
+      setBranchSource(null);
+      showToast(`"${name}" branched — make it yours`);
+      // Straight into the wizard so the changes get made while they're fresh.
+      navigateTo('add', branch);
+    } catch {
+      showToast('Could not create branch');
+    } finally {
+      setBranching(false);
+    }
+  };
 
   const openExport = (list: Recipe[]) => {
     if (list.length === 0) return;
@@ -174,7 +199,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
                   onDiscard={() => setDraftToDiscard(recipe)}
                 />
               ))
-            : lib.filteredRecipes.map((recipe) => (
+            : lib.libraryFamilies.map(({ root: recipe, variationCount }) => (
                 <RecipeCard
                   key={recipe.id}
                   recipe={recipe}
@@ -186,10 +211,39 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
                   onSelectToggle={() => lib.toggleSelect(recipe.id)}
                   onClick={() => navigateTo('detail', recipe)}
                   onCookTonight={() => startCooking(recipe)}
+                  variationCount={variationCount}
+                  onOpenVariations={() => setFamilyRoot(recipe)}
                 />
               ))}
         </motion.div>
       )}
+
+      <VariationsSheet
+        open={familyRoot !== null}
+        root={familyRoot}
+        allRecipes={allWithDrafts}
+        onClose={() => setFamilyRoot(null)}
+        onOpenRecipe={(recipe) => {
+          setFamilyRoot(null);
+          navigateTo('detail', recipe);
+        }}
+        onOpenDraft={(recipe) => {
+          setFamilyRoot(null);
+          onResumeDraft(recipe);
+        }}
+        onNewVariation={(source) => {
+          setFamilyRoot(null);
+          setBranchSource(source);
+        }}
+      />
+
+      <BranchDialog
+        open={branchSource !== null}
+        sourceTitle={branchSource?.title ?? ''}
+        busy={branching}
+        onConfirm={(name, note) => void handleCreateBranch(name, note)}
+        onCancel={() => setBranchSource(null)}
+      />
 
       <ExportRecipeModal
         recipes={exportRecipes}

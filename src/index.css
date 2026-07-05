@@ -87,6 +87,12 @@
   --font-body: "Work Sans", sans-serif;
   --font-label: "Work Sans", sans-serif;
 
+  --animate-sheet-up: sheet-up 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
   --color-primary: #496251;
   --color-primary-container: #617a69;
   --color-primary-fixed: #cee9d5;
