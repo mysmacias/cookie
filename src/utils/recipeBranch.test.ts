@@ -3,10 +3,12 @@ import type { Recipe } from '../types';
 import {
   branchLabel,
   buildBranchPayload,
+  collapseToFamilies,
   diffRecipes,
   getFamilyRoot,
   getParentRecipe,
   getRecipeFamily,
+  summarizeDiff,
 } from './recipeBranch';
 
 function makeRecipe(overrides: Partial<Recipe> & Pick<Recipe, 'id' | 'title'>): Recipe {
@@ -175,6 +177,57 @@ describe('diffRecipes', () => {
   it('is empty for an untouched copy', () => {
     const copy = { ...nonna, id: 'copy', parentId: nonna.id };
     expect(diffRecipes(nonna, copy).isEmpty).toBe(true);
+  });
+});
+
+describe('summarizeDiff', () => {
+  it('joins the first changes and counts the rest', () => {
+    const summary = summarizeDiff(diffRecipes(nonna, moms));
+    expect(summary).toBe('~ Pecorino 80 g → 40 g · + Parmesan · +1 more');
+  });
+
+  it('respects a custom limit', () => {
+    const summary = summarizeDiff(diffRecipes(nonna, moms), 3);
+    expect(summary).toBe('~ Pecorino 80 g → 40 g · + Parmesan · ~ Combine');
+  });
+
+  it('returns an empty string for an untouched copy', () => {
+    const copy = { ...nonna, id: 'copy', parentId: nonna.id };
+    expect(summarizeDiff(diffRecipes(nonna, copy))).toBe('');
+  });
+});
+
+describe('collapseToFamilies', () => {
+  it('collapses a family into one entry led by its root', () => {
+    const families = collapseToFamilies([nonna, moms, marcos, unrelated], all);
+    expect(families.map(f => f.root.id)).toEqual(['r1', 'r9']);
+    expect(families[0].variationCount).toBe(2);
+    expect(families[1].variationCount).toBe(0);
+  });
+
+  it('surfaces the root even when only a branch matched the filters', () => {
+    const families = collapseToFamilies([moms], all);
+    expect(families.map(f => f.root.id)).toEqual(['r1']);
+    expect(families[0].variationCount).toBe(2);
+  });
+
+  it('counts draft branches that are not in the visible list', () => {
+    const draft = makeRecipe({ id: 'r6', title: 'Draft take', parentId: 'r1', draft: true });
+    const families = collapseToFamilies([nonna, unrelated], [...all, draft]);
+    expect(families[0].variationCount).toBe(3);
+  });
+
+  it('keeps the visible order for family positioning', () => {
+    const families = collapseToFamilies([unrelated, marcos], all);
+    expect(families.map(f => f.root.id)).toEqual(['r9', 'r1']);
+  });
+
+  it('survives cycles in corrupted data', () => {
+    const a = makeRecipe({ id: 'a', title: 'A', parentId: 'b' });
+    const b = makeRecipe({ id: 'b', title: 'B', parentId: 'a' });
+    const families = collapseToFamilies([a], [a, b]);
+    expect(families).toHaveLength(1);
+    expect(families[0].variationCount).toBeLessThanOrEqual(1);
   });
 });
 

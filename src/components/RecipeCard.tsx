@@ -16,6 +16,10 @@ interface RecipeCardProps {
   selectionMode?: boolean;
   selected?: boolean;
   onSelectToggle?: () => void;
+  /** How many variations (published or draft) hang off this recipe's family */
+  variationCount?: number;
+  /** Opens the variations sheet; the pill only renders when count > 0 */
+  onOpenVariations?: () => void;
 }
 
 export const RecipeCard: React.FC<RecipeCardProps> = ({
@@ -28,6 +32,8 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
   selectionMode = false,
   selected = false,
   onSelectToggle,
+  variationCount = 0,
+  onOpenVariations,
 }) => {
   const ctx = useRecipes();
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
@@ -146,19 +152,33 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
         >
           <Heart size={16} fill={isBookmarked ? 'currentColor' : 'none'} strokeWidth={2} />
         </button>
-        {(recipe.isHeirloom || recipe.parentId || recipe.branchName) && (
+        {(recipe.isHeirloom || recipe.parentId || recipe.branchName || (onOpenVariations && variationCount > 0)) && (
           <div className="absolute bottom-4 left-4 z-10 flex flex-wrap gap-1.5 max-w-[calc(100%-6rem)]">
             {recipe.isHeirloom && (
               <span className="bg-secondary/95 text-on-primary backdrop-blur px-2.5 py-1 rounded-full text-[9px] font-label uppercase tracking-widest">
                 Heirloom
               </span>
             )}
-            {(recipe.parentId || recipe.branchName) && (
+            {onOpenVariations && variationCount > 0 ? (
+              <button
+                type="button"
+                disabled={selectionMode}
+                aria-label={`Show ${variationCount} ${variationCount === 1 ? 'variation' : 'variations'} of ${recipe.title}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenVariations();
+                }}
+                className="inline-flex items-center gap-1 bg-surface/90 text-primary backdrop-blur px-2.5 py-1 rounded-full text-[9px] font-label uppercase tracking-widest border border-outline-variant/20 shadow-md hover:bg-surface transition-colors"
+              >
+                <GitBranch size={10} aria-hidden />
+                {variationCount} {variationCount === 1 ? 'variation' : 'variations'}
+              </button>
+            ) : (recipe.parentId || recipe.branchName) ? (
               <span className="inline-flex items-center gap-1 bg-surface/75 text-primary backdrop-blur px-2.5 py-1 rounded-full text-[9px] font-label uppercase tracking-widest border border-outline-variant/20">
                 <GitBranch size={10} aria-hidden />
                 {recipe.branchName || 'Branch'}
               </span>
-            )}
+            ) : null}
           </div>
         )}
         {selectionMode ? (
