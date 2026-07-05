@@ -60,6 +60,10 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
   // the flag when the user finishes. draftIdRef holds the id once created.
   const draftIdRef = useRef<string | null>(null);
   const creatingDraftRef = useRef(false);
+  // In-flight first draft creation; submit awaits it so publishing while the
+  // draft POST is still pending updates that record instead of creating a
+  // duplicate (which would also strand a stray draft in the library).
+  const pendingCreateRef = useRef<Promise<void> | null>(null);
   const isDraftRef = useRef<boolean>(editingRecipe?.draft === true);
   const submittedRef = useRef(false);
 
@@ -140,14 +144,19 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     // concurrent unmount/back save from creating a second draft.
     if (creatingDraftRef.current) return;
     creatingDraftRef.current = true;
-    try {
-      const created = await ctx.addRecipe({ ...snap.payload, draft: true });
-      draftIdRef.current = created.id;
-      isDraftRef.current = true;
-      onSavedRef.current?.();
-    } finally {
-      creatingDraftRef.current = false;
-    }
+    const create = (async () => {
+      try {
+        const created = await ctx.addRecipe({ ...snap.payload, draft: true });
+        draftIdRef.current = created.id;
+        isDraftRef.current = true;
+        onSavedRef.current?.();
+      } finally {
+        creatingDraftRef.current = false;
+        pendingCreateRef.current = null;
+      }
+    })();
+    pendingCreateRef.current = create;
+    await create;
   }, [ctx]);
 
   // Call the latest performSave from effects/handlers that must not re-run when
@@ -304,18 +313,35 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
 
   const submit = useCallback(async (onBack: () => void) => {
     // Publishing: stop autosave from re-drafting and clear the draft flag.
+    const wasDraft = isDraftRef.current;
     submittedRef.current = true;
     isDraftRef.current = false;
-    const payload = buildPayload();
-    if (editingRecipe) {
-      await ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: editingRecipe.isHeirloom, ...payload });
-    } else if (draftIdRef.current) {
-      await ctx.updateRecipe({ id: draftIdRef.current, ...payload });
-    } else {
-      await ctx.addRecipe(payload);
+    try {
+      // If the very first draft save is still in flight, wait for it so we
+      // publish into that record instead of POSTing a duplicate. Its failure
+      // is fine — we fall through to creating the recipe directly.
+      if (pendingCreateRef.current) {
+        await pendingCreateRef.current.catch(() => {});
+      }
+      const payload = buildPayload();
+      if (editingRecipe) {
+        await ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: editingRecipe.isHeirloom, ...payload });
+      } else if (draftIdRef.current) {
+        await ctx.updateRecipe({ id: draftIdRef.current, ...payload });
+      } else {
+        const created = await ctx.addRecipe(payload);
+        draftIdRef.current = created.id;
+      }
+      onSavedRef.current?.();
+      onBack();
+    } catch (err) {
+      // Publish failed: re-arm autosave and keep the work as a draft so
+      // nothing is lost, then let the screen surface the error.
+      submittedRef.current = false;
+      isDraftRef.current = wasDraft || !editingRecipe;
+      void performSaveRef.current();
+      throw err;
     }
-    onSavedRef.current?.();
-    onBack();
   }, [editingRecipe, buildPayload, ctx]);
 
   return {

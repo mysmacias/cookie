@@ -27,6 +27,8 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
   const isPublishedEdit = form.isEdit && !isDraft;
   // Snapshot for the celebration screen; form state resets on "Add another".
   const [celebrated, setCelebrated] = useState<{ title: string; heroImage: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleBack = () => {
     form.persistNow();
@@ -43,15 +45,30 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
     return true;
   };
 
-  const handleSubmit = () => {
-    void form.submit(() => {
-      if (isPublishedEdit) {
-        // Edits of a published recipe just return to its detail page — no fanfare.
-        onBack();
-      } else {
-        setCelebrated({ title: form.title.trim(), heroImage: form.heroImage });
-      }
-    });
+  const handleSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await form.submit(() => {
+        if (isPublishedEdit) {
+          // Edits of a published recipe just return to its detail page — no fanfare.
+          onBack();
+        } else {
+          setCelebrated({ title: form.title.trim(), heroImage: form.heroImage });
+        }
+      });
+    } catch (err) {
+      // The hook already re-saved the work as a draft; tell the cook what
+      // happened so they can retry instead of silently losing the tap.
+      setSubmitError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Something went wrong while saving. Your work is kept as a draft — please try again.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleAddAnother = () => {
@@ -175,8 +192,10 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
             steps={form.steps}
             isEdit={form.isEdit}
             isDraft={isDraft}
+            submitting={submitting}
+            submitError={submitError}
             onBack={() => form.setWizardStep(3)}
-            onSubmit={handleSubmit}
+            onSubmit={() => void handleSubmit()}
           />
         )}
       </motion.div>
