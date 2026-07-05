@@ -4,7 +4,7 @@ import { scanRecipeFromImage, RecipeScanError } from '../../services/recipeScan'
 import type { ScanRecipeFromImageResult } from '../../services/recipeScan';
 import { X, ImagePlus, ScanLine, ChevronDown } from 'lucide-react';
 import type { Ingredient, Step, Recipe } from '../../types';
-import { fileToDataUrl } from '../../utils/fileHelpers';
+import { fileToDataUrl, fileToCompressedDataUrl, shrinkImageDataUrl } from '../../utils/fileHelpers';
 import { Input, Textarea } from '../../components/ui/Input';
 import { Label } from '../../components/ui/Label';
 import { Button } from '../../components/ui/Button';
@@ -89,10 +89,12 @@ export const RecipeFormBasics: React.FC<RecipeFormBasicsProps> = ({
     setScanError(null);
     setScanBusy(true);
     try {
+      // Scan with the full-resolution photo for legibility, but store a
+      // shrunken copy — oversized embedded images make recipe saves fail.
       const dataUrl = await fileToDataUrl(file);
       const out = await scanRecipeFromImage(dataUrl);
       applyScanResult(out);
-      setHeroImage(dataUrl);
+      setHeroImage(await shrinkImageDataUrl(dataUrl));
     } catch (err: unknown) {
       if (err instanceof RecipeScanError) setScanError(err.message);
       else setScanError(err instanceof Error ? err.message : 'Scan failed.');
@@ -104,7 +106,7 @@ export const RecipeFormBasics: React.FC<RecipeFormBasicsProps> = ({
   const handleHeroFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (file) setHeroImage(await fileToDataUrl(file));
+    if (file) setHeroImage(await fileToCompressedDataUrl(file));
   };
 
   return (

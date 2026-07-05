@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { X, Plus, ImagePlus, Pencil, ClipboardList } from 'lucide-react';
 import type { Ingredient } from '../../types';
-import { fileToDataUrl } from '../../utils/fileHelpers';
+import { fileToCompressedDataUrl } from '../../utils/fileHelpers';
 import { parseIngredientLines } from '../../utils/parseIngredientLines';
 import { Input, Textarea } from '../../components/ui/Input';
 import { Label } from '../../components/ui/Label';
@@ -35,7 +35,8 @@ export const RecipeFormIngredients: React.FC<RecipeFormIngredientsProps> = ({
   const handleIngFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (file) setIngImage(await fileToDataUrl(file));
+    // Ingredient photos render as small thumbnails; keep them extra compact.
+    if (file) setIngImage(await fileToCompressedDataUrl(file, 640));
   };
 
   // Enter anywhere in the row adds the ingredient and puts the cursor back on

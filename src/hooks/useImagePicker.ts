@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react';
-import { fileToDataUrl } from '../utils/fileHelpers';
+import { fileToCompressedDataUrl } from '../utils/fileHelpers';
 
 /** Phones/tablets expose a real camera via <input capture>; gate the camera button on a coarse pointer. */
 const supportsCamera =
@@ -16,7 +16,7 @@ export function useImagePicker(onPick: (dataUrl: string) => void) {
       const file = e.target.files?.[0];
       e.target.value = '';
       if (!file) return;
-      const dataUrl = await fileToDataUrl(file);
+      const dataUrl = await fileToCompressedDataUrl(file);
       onPick(dataUrl);
     },
     [onPick],

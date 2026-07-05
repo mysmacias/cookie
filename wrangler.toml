@@ -9,10 +9,12 @@ database_name = "cookie-db"
 database_id = "bfb956b9-aaf1-44d3-ab98-bbcf59ca90b0"
 migrations_dir = "migrations"
 
-# Enable R2 in the Cloudflare dashboard, create the bucket, then uncomment:
-# [[r2_buckets]]
-# binding = "MEDIA_BUCKET"
-# bucket_name = "cookie-media"
+# Requires R2 enabled on the account (Cloudflare dashboard, one-time) and the
+# bucket created: npx wrangler r2 bucket create cookie-media
+# Deploys fail until the bucket exists.
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "cookie-media"
 
 # Secrets (set per environment, not committed):
 #   npx wrangler pages secret put ANTHROPIC_API_KEY
