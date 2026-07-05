@@ -19,6 +19,8 @@ interface RecipeFormReviewProps {
   steps: Step[];
   isEdit: boolean;
   isDraft?: boolean;
+  submitting?: boolean;
+  submitError?: string | null;
   onBack: () => void;
   onSubmit: () => void;
 }
@@ -26,7 +28,8 @@ interface RecipeFormReviewProps {
 export const RecipeFormReview: React.FC<RecipeFormReviewProps> = ({
   title, description, heroImage, category, difficulty, prepTime,
   bakeTime, yields, chefNote,
-  tags, ingredients, steps, isEdit, isDraft = false, onBack, onSubmit,
+  tags, ingredients, steps, isEdit, isDraft = false,
+  submitting = false, submitError = null, onBack, onSubmit,
 }) => (
   <motion.div
     key="step4"
@@ -115,10 +118,16 @@ export const RecipeFormReview: React.FC<RecipeFormReviewProps> = ({
           Looking delicious. One tap and it joins your library.
         </p>
       )}
+      {submitError && (
+        <div role="alert" className="rounded-xl border border-error/40 bg-error/10 px-4 py-3 text-sm text-error">
+          <p className="font-medium">Couldn't save your recipe: {submitError}</p>
+          <p className="mt-1">Don't worry — your work is safe as a draft. Check your connection and try again.</p>
+        </div>
+      )}
       <div className="flex items-center gap-4">
-        <Button variant="outline" onClick={onBack}>Back</Button>
-        <Button variant="primary" size="lg" onClick={onSubmit} className="flex-1">
-          {isEdit && !isDraft ? 'Save changes' : 'Add to my library'}
+        <Button variant="outline" onClick={onBack} disabled={submitting}>Back</Button>
+        <Button variant="primary" size="lg" onClick={onSubmit} disabled={submitting} className="flex-1">
+          {submitting ? 'Saving…' : isEdit && !isDraft ? 'Save changes' : 'Add to my library'}
         </Button>
       </div>
     </div>
