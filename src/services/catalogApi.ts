@@ -1,5 +1,6 @@
 import { apiFetch } from './apiClient';
 import type { Recipe } from '../types';
+import { normalizeRecipeTaxonomy } from '../utils/recipeTaxonomy';
 
 export interface CatalogPreview {
   id: string;
@@ -38,6 +39,16 @@ export async function searchCatalog(params: CatalogSearchParams): Promise<Catalo
 
   const query = qs.toString();
   return apiFetch<CatalogSearchResult>(`/api/catalog/search${query ? `?${query}` : ''}`);
+}
+
+/**
+ * Fetch a sample of catalog recipes slimmed down for the similarity graph
+ * (ingredient names, tags, category, time — no steps). Normalized the same
+ * way as library recipes so region colors and category chips line up.
+ */
+export async function fetchCatalogGraphRecipes(): Promise<Recipe[]> {
+  const res = await apiFetch<{ data: Recipe[] }>('/api/catalog/graph');
+  return res.data.map(normalizeRecipeTaxonomy);
 }
 
 export async function importRecipeFromCatalog(id: string): Promise<Recipe> {

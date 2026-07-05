@@ -1,11 +1,13 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Play, ExternalLink, Network, ChefHat, Clock, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { ChevronLeft, Play, ExternalLink, Network, ChefHat, Clock, Download, Loader2, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceCollide, forceX, forceY } from 'd3-force';
-import { Screen } from '../hooks/useNavigation';
+import { Screen, type GraphSource } from '../hooks/useNavigation';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { useRecipes } from '../context/RecipeContext';
+import { useToast } from '../components/ui/Toast';
+import { fetchCatalogGraphRecipes, importRecipeFromCatalog } from '../services/catalogApi';
 import type { Recipe } from '../types';
 import {
   buildRecipeGraph,
@@ -20,9 +22,16 @@ import {
 } from '../utils/recipeSimilarity';
 
 interface RecipeGraphScreenProps {
-  navigateTo: (screen: Screen, recipe?: Recipe) => void;
+  navigateTo: (
+    screen: Screen,
+    recipe?: Recipe,
+    cookPlanIds?: string[],
+    options?: { graphSource?: GraphSource },
+  ) => void;
   startCooking: (recipe: Recipe) => void;
   focusRecipeId?: string | null;
+  /** 'library' graphs the user's recipes; 'discover' graphs a catalog sample. */
+  source?: GraphSource;
   onCookTogether?: (recipeIds: string[]) => void;
 }
 
@@ -136,25 +145,48 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
   navigateTo,
   startCooking,
   focusRecipeId: focusProp,
+  source = 'library',
   onCookTogether,
 }) => {
   const ctx = useRecipes();
+  const { showToast } = useToast();
   const [focusId, setFocusId] = useState<string | null>(focusProp ?? parseFocusFromUrl());
   const [selectedId, setSelectedId] = useState<string | null>(focusProp ?? parseFocusFromUrl());
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
   const [hoverId, setHoverId] = useState<string | null>(null);
 
+  const isDiscover = source === 'discover';
+  const [catalogRecipes, setCatalogRecipes] = useState<Recipe[] | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [importingId, setImportingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isDiscover) return;
+    let cancelled = false;
+    setCatalogRecipes(null);
+    setCatalogError(null);
+    fetchCatalogGraphRecipes()
+      .then(list => { if (!cancelled) setCatalogRecipes(list); })
+      .catch(e => {
+        if (!cancelled) setCatalogError(e instanceof Error ? e.message : 'Failed to load the collection.');
+      });
+    return () => { cancelled = true; };
+  }, [isDiscover]);
+
+  const recipes = isDiscover ? catalogRecipes ?? [] : ctx.recipes;
+  const isLoading = isDiscover ? catalogRecipes === null && !catalogError : ctx.isLoading;
+
   // Defer the heavy graph rebuild so dragging the slider stays smooth — the
   // thumb tracks `threshold` immediately while the graph catches up at low
   // priority instead of recomputing O(n²) similarity on every tick.
   const deferredThreshold = useDeferredValue(threshold);
 
-  const categories = useMemo(() => getRecipeCategories(ctx.recipes), [ctx.recipes]);
+  const categories = useMemo(() => getRecipeCategories(recipes), [recipes]);
 
   const graph = useMemo(
-    () => buildRecipeGraph(ctx.recipes, { threshold: deferredThreshold, categoryFilter }),
-    [ctx.recipes, deferredThreshold, categoryFilter],
+    () => buildRecipeGraph(recipes, { threshold: deferredThreshold, categoryFilter }),
+    [recipes, deferredThreshold, categoryFilter],
   );
 
   const activeFocusId = focusId && graph.nodes.some(n => n.id === focusId) ? focusId : null;
@@ -410,21 +442,29 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
 
   // ---- Selection / sidebar ---------------------------------------------
   const selectedRecipe = useMemo(
-    () => ctx.recipes.find(r => r.id === selectedId) ?? null,
-    [ctx.recipes, selectedId],
+    () => recipes.find(r => r.id === selectedId) ?? null,
+    [recipes, selectedId],
+  );
+
+  // The user's own copy of the selected recipe, when it exists. In discover
+  // mode catalog nodes are slimmed (no steps), so View/Cook must use this
+  // full library copy; absent it, the sidebar offers "Save to library".
+  const selectedLibraryCopy = useMemo(
+    () => (selectedRecipe ? ctx.recipes.find(r => r.id === selectedRecipe.id) ?? null : null),
+    [selectedRecipe, ctx.recipes],
   );
 
   const selectedBreakdown: SimilarityBreakdown | null = useMemo(() => {
     if (!selectedRecipe || !activeFocusId || selectedRecipe.id === activeFocusId) return null;
-    const focus = ctx.recipes.find(r => r.id === activeFocusId);
+    const focus = recipes.find(r => r.id === activeFocusId);
     if (!focus) return null;
     return computeSimilarity(focus, selectedRecipe);
-  }, [selectedRecipe, activeFocusId, ctx.recipes]);
+  }, [selectedRecipe, activeFocusId, recipes]);
 
   const similarList = useMemo(() => {
     if (!activeFocusId) return [];
-    return getSimilarRecipes(activeFocusId, ctx.recipes, 12).filter(r => r.breakdown.score >= deferredThreshold);
-  }, [activeFocusId, ctx.recipes, deferredThreshold]);
+    return getSimilarRecipes(activeFocusId, recipes, 12).filter(r => r.breakdown.score >= deferredThreshold);
+  }, [activeFocusId, recipes, deferredThreshold]);
 
   useEffect(() => {
     document.title = activeFocusId ? 'Similar recipes · COOKIE' : 'Recipe graph · COOKIE';
@@ -453,16 +493,30 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
     setSelectedId(prev => (prev === id ? null : id));
   }, []);
 
-  const focusRecipe = activeFocusId ? ctx.recipes.find(r => r.id === activeFocusId) : null;
+  const focusRecipe = activeFocusId ? recipes.find(r => r.id === activeFocusId) : null;
 
   const handleFocusRecipe = useCallback(
     (recipe: Recipe) => {
       setFocusId(recipe.id);
       setSelectedId(recipe.id);
-      navigateTo('graph', recipe);
+      navigateTo('graph', recipe, undefined, { graphSource: source });
     },
-    [navigateTo],
+    [navigateTo, source],
   );
+
+  const handleImportSelected = useCallback(async () => {
+    if (!selectedRecipe) return;
+    setImportingId(selectedRecipe.id);
+    try {
+      const recipe = await importRecipeFromCatalog(selectedRecipe.id);
+      await ctx.refreshRecipes();
+      showToast(`"${recipe.title}" added to your library.`);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Import failed.');
+    } finally {
+      setImportingId(null);
+    }
+  }, [selectedRecipe, ctx, showToast]);
 
   const handleCookWithSimilar = useCallback(() => {
     if (!focusRecipe || !onCookTogether) return;
@@ -478,15 +532,15 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
   const fitView = useCallback(() => fgRef.current?.zoomToFit(500, 48), []);
 
   return (
-    <SwipeBackWrapper onBack={() => navigateTo('library')}>
+    <SwipeBackWrapper onBack={() => navigateTo(isDiscover ? 'discover' : 'library')}>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-10 pb-24">
         <button
           type="button"
-          onClick={() => navigateTo('library')}
+          onClick={() => navigateTo(isDiscover ? 'discover' : 'library')}
           className="flex items-center gap-2 text-sm font-label uppercase tracking-widest text-on-surface-variant hover:text-primary"
         >
           <ChevronLeft size={16} />
-          Back to Library
+          {isDiscover ? 'Back to Discover' : 'Back to Library'}
         </button>
 
         <div className="space-y-3">
@@ -496,7 +550,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
           </p>
           <h1 className="text-5xl md:text-7xl font-headline italic leading-none">Recipe graph</h1>
           <p className="text-on-surface-variant max-w-2xl">
-            Explore how your recipes relate through shared ingredients, tags, and cuisine. Drag nodes to rearrange,
+            Explore how {isDiscover ? 'recipes from the Cookie collection' : 'your recipes'} relate through shared ingredients, tags, and cuisine. Drag nodes to rearrange,
             scroll to zoom. Bigger circles take longer to cook; colors group recipes by region of origin.
             {focusRecipe ? (
               <> Focused on <span className="text-primary font-headline italic">{focusRecipe.title}</span>.</>
@@ -556,9 +610,9 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
             {graph.nodes.length === 0 ? (
               <div className="rounded-2xl border border-outline-variant/40 bg-surface-container-low/50 p-12 text-center">
                 <p className="text-on-surface-variant">
-                  {ctx.isLoading
-                    ? 'Loading your recipes…'
-                    : 'No recipes match these filters. Try lowering the similarity threshold.'}
+                  {isLoading
+                    ? isDiscover ? 'Loading the Cookie collection…' : 'Loading your recipes…'
+                    : catalogError ?? 'No recipes match these filters. Try lowering the similarity threshold.'}
                 </p>
               </div>
             ) : (
@@ -657,7 +711,7 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
               </div>
             )}
 
-            {activeFocusId && similarList.length > 0 && onCookTogether && (
+            {!isDiscover && activeFocusId && similarList.length > 0 && onCookTogether && (
               <button
                 type="button"
                 onClick={handleCookWithSimilar}
@@ -767,22 +821,38 @@ export const RecipeGraphScreen: React.FC<RecipeGraphScreenProps> = ({
                 )}
 
                 <div className="flex flex-col gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => navigateTo('detail', selectedRecipe)}
-                    className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-primary text-primary text-xs font-label uppercase tracking-widest font-bold hover:bg-primary/8"
-                  >
-                    <ExternalLink size={16} />
-                    View recipe
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => startCooking(selectedRecipe)}
-                    className="flex items-center justify-center gap-2 w-full py-3 rounded-full bg-primary text-on-primary text-xs font-label uppercase tracking-widest font-bold hover:bg-primary-container"
-                  >
-                    <Play size={16} fill="currentColor" />
-                    Cook
-                  </button>
+                  {selectedLibraryCopy ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => navigateTo('detail', selectedLibraryCopy)}
+                        className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-primary text-primary text-xs font-label uppercase tracking-widest font-bold hover:bg-primary/8"
+                      >
+                        <ExternalLink size={16} />
+                        View recipe
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startCooking(selectedLibraryCopy)}
+                        className="flex items-center justify-center gap-2 w-full py-3 rounded-full bg-primary text-on-primary text-xs font-label uppercase tracking-widest font-bold hover:bg-primary-container"
+                      >
+                        <Play size={16} fill="currentColor" />
+                        Cook
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={importingId === selectedRecipe.id}
+                      onClick={() => void handleImportSelected()}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-full bg-primary text-on-primary text-xs font-label uppercase tracking-widest font-bold hover:bg-primary-container disabled:opacity-50"
+                    >
+                      {importingId === selectedRecipe.id
+                        ? <Loader2 size={16} className="animate-spin" />
+                        : <Download size={16} />}
+                      {importingId === selectedRecipe.id ? 'Saving…' : 'Save to library'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleFocusRecipe(selectedRecipe)}

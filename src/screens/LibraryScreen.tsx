@@ -19,9 +19,10 @@ interface LibraryScreenProps {
   startCooking: (recipe: Recipe) => void;
   onResumeDraft: (recipe: Recipe) => void;
   onCookTogether?: (recipeIds: string[]) => void;
+  onOpenGraph: () => void;
 }
 
-export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startCooking, onResumeDraft, onCookTogether }) => {
+export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startCooking, onResumeDraft, onCookTogether, onOpenGraph }) => {
   const lib = useLibraryFilters();
   const { showToast } = useToast();
   const { isLoading, deleteRecipe } = useRecipes();
@@ -110,6 +111,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigateTo, startC
         }
         cookTogetherCount={lib.selectedCount}
         onAddRecipe={() => navigateTo('add')}
+        onOpenGraph={onOpenGraph}
         gridCols={lib.gridCols}
         setGridCols={lib.setGridCols}
         cuisines={lib.cuisines}

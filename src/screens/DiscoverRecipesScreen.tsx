@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, BookOpen, Download, Globe, Loader2, Search, Sparkles } from 'lucide-react';
+import { ArrowLeft, BookOpen, Download, Globe, Loader2, Network, Search, Sparkles } from 'lucide-react';
 import type { Recipe } from '../types';
 import { Screen } from '../hooks/useNavigation';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
@@ -27,6 +27,7 @@ import { useToast } from '../components/ui/Toast';
 
 interface DiscoverRecipesScreenProps {
   navigateTo: (screen: Screen, recipe?: Recipe) => void;
+  onOpenGraph: () => void;
 }
 
 type DiscoverTab = 'catalog' | 'api' | 'web';
@@ -47,7 +48,7 @@ function hostFromUrl(url: string): string {
   }
 }
 
-export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ navigateTo }) => {
+export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ navigateTo, onOpenGraph }) => {
   const { recipes, refreshRecipes } = useRecipes();
   const { showToast } = useToast();
 
@@ -274,7 +275,8 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Discover sources">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Discover sources">
         <button
           type="button"
           role="tab"
@@ -315,6 +317,15 @@ export const DiscoverRecipesScreen: React.FC<DiscoverRecipesScreenProps> = ({ na
           }
         >
           Recipe API
+        </button>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenGraph}
+          className="ml-auto flex items-center gap-2 rounded-full border border-outline-variant px-5 py-2.5 text-xs font-label uppercase tracking-widest hover:border-primary hover:text-primary transition-colors"
+        >
+          <Network size={14} />
+          Graph
         </button>
       </div>
 

@@ -7,6 +7,9 @@ import {
   type CookPlan,
 } from '../utils/recipeScheduler';
 
+/** Which recipe set the graph screen builds from. */
+export type GraphSource = 'library' | 'discover';
+
 export type Screen =
   | 'library'
   | 'discover'
@@ -30,6 +33,8 @@ interface RouteState {
   screen: Screen;
   recipeId: string | null;
   graphFocusId: string | null;
+  /** Only set for the graph screen; defaults to 'library' when absent. */
+  graphSource?: GraphSource;
   cookPlanRecipeIds: string[];
   collectionId: string | null;
   shareToken: string | null;
@@ -74,7 +79,10 @@ function routeFromLocation(pathname: string, search: string): RouteState {
   if (parts[0] === 'share' && parts[1]) {
     return { screen: 'share', recipeId: null, graphFocusId: null, cookPlanRecipeIds: [], collectionId: null, shareToken: parts[1], editing: false };
   }
-  if (parts[0] === 'graph') return { screen: 'graph', recipeId: null, graphFocusId: focus, cookPlanRecipeIds: [], collectionId: null, shareToken: null, editing: false };
+  if (parts[0] === 'graph') {
+    const graphSource: GraphSource = params.get('source') === 'discover' ? 'discover' : 'library';
+    return { screen: 'graph', recipeId: null, graphFocusId: focus, graphSource, cookPlanRecipeIds: [], collectionId: null, shareToken: null, editing: false };
+  }
   if (parts[0] === 'cook-plan') {
     if (parts[1] === 'cook') {
       return { screen: 'cook-plan-mode', recipeId: null, graphFocusId: null, cookPlanRecipeIds: recipeIds, collectionId: null, shareToken: null, editing: false };
@@ -98,6 +106,7 @@ function pathFor(
   cookPlanRecipeIds?: string[],
   collectionId?: string | null,
   shareToken?: string | null,
+  graphSource?: GraphSource,
 ): string {
   switch (screen) {
     case 'library': return '/';
@@ -111,10 +120,13 @@ function pathFor(
       return collectionId ? `/collections/${encodeURIComponent(collectionId)}` : '/collections';
     case 'share':
       return shareToken ? `/share/${encodeURIComponent(shareToken)}` : '/';
-    case 'graph':
-      return recipe
-        ? `/graph?focus=${encodeURIComponent(recipe.id)}`
-        : '/graph';
+    case 'graph': {
+      const qs = new URLSearchParams();
+      if (recipe) qs.set('focus', recipe.id);
+      if (graphSource === 'discover') qs.set('source', 'discover');
+      const query = qs.toString();
+      return query ? `/graph?${query}` : '/graph';
+    }
     case 'cook-plan': {
       const ids = cookPlanRecipeIds?.filter(Boolean) ?? [];
       return ids.length > 0
@@ -150,6 +162,7 @@ export function useNavigation() {
   const [currentScreen, setCurrentScreen] = useState<Screen>(initialRoute.screen);
   const [routeRecipeId, setRouteRecipeId] = useState<string | null>(initialRoute.recipeId);
   const [graphFocusId, setGraphFocusId] = useState<string | null>(initialRoute.graphFocusId);
+  const [graphSource, setGraphSource] = useState<GraphSource>(initialRoute.graphSource ?? 'library');
   const [collectionId, setCollectionId] = useState<string | null>(initialRoute.collectionId);
   const [shareToken, setShareToken] = useState<string | null>(initialRoute.shareToken);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -163,6 +176,7 @@ export function useNavigation() {
     setCurrentScreen(next.screen);
     setRouteRecipeId(next.recipeId);
     setGraphFocusId(next.graphFocusId);
+    setGraphSource(next.graphSource ?? 'library');
     setCookPlanRecipeIds(next.cookPlanRecipeIds);
     setCollectionId(next.collectionId);
     setShareToken(next.shareToken);
@@ -196,11 +210,12 @@ export function useNavigation() {
     screen: Screen,
     recipe?: Recipe,
     cookPlanIds?: string[],
-    options?: { collectionId?: string; shareToken?: string },
+    options?: { collectionId?: string; shareToken?: string; graphSource?: GraphSource },
   ) => {
     if (recipe) setSelectedRecipe(recipe);
     setRouteRecipeId(recipe?.id ?? null);
     setGraphFocusId(screen === 'graph' && recipe ? recipe.id : null);
+    setGraphSource(screen === 'graph' ? options?.graphSource ?? 'library' : 'library');
     if (screen === 'cook-plan' || screen === 'cook-plan-mode') {
       setCookPlanRecipeIds(cookPlanIds ?? []);
     }
@@ -210,7 +225,7 @@ export function useNavigation() {
     window.history.pushState(
       null,
       '',
-      pathFor(screen, recipe, cookPlanIds, options?.collectionId ?? collectionId, options?.shareToken ?? shareToken),
+      pathFor(screen, recipe, cookPlanIds, options?.collectionId ?? collectionId, options?.shareToken ?? shareToken, options?.graphSource),
     );
     document.title = `${SCREEN_TITLES[screen]} · COOKIE`;
     window.scrollTo(0, 0);
@@ -258,6 +273,7 @@ export function useNavigation() {
     currentScreen,
     routeRecipeId,
     graphFocusId,
+    graphSource,
     collectionId,
     shareToken,
     cookPlanRecipeIds,
