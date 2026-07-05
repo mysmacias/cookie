@@ -1,10 +1,11 @@
 import React, { useMemo, useRef, useEffect, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UtensilsCrossed, ImagePlus, Trash2, Sun, List, ShoppingCart } from 'lucide-react';
+import { X, UtensilsCrossed, ImagePlus, Trash2, Sun, List, ShoppingCart, GitBranch } from 'lucide-react';
 import { haptic } from '../utils/haptics';
 import { Recipe } from '../types';
 import { Screen } from '../hooks/useNavigation';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { BranchDialog } from '../components/BranchDialog';
 import { saveRecipeNotes } from '../services/recipeNotesApi';
 import { fetchShoppingList, saveShoppingList } from '../services/shoppingListApi';
 import { buildShoppingItemsFromRecipes, mergeShoppingItems } from '../utils/shoppingList';
@@ -40,6 +41,14 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
   const [kitchenMode, setKitchenMode] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
+  // "I did this differently" observations, keyed by step index. They seed the
+  // branch note in the finish dialog so deviations become a branch of the
+  // recipe instead of being forgotten by dinner.
+  const [stepChangeNotes, setStepChangeNotes] = useState<Record<number, string>>({});
+  const [noteEditorOpen, setNoteEditorOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [finishSheetOpen, setFinishSheetOpen] = useState(false);
+  const [savingBranch, setSavingBranch] = useState(false);
   const reducedMotion = useReducedMotion();
   useWakeLock(true);
   const step = recipe.steps[stepIndex];
@@ -112,13 +121,64 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
     setConfirmExitOpen(true);
   }, [stepIndex, timer.isStarted, onExit]);
 
-  const finishCooking = useCallback(async () => {
-    void haptic('success');
+  useEffect(() => {
+    setNoteEditorOpen(false);
+  }, [stepIndex]);
+
+  const openNoteEditor = useCallback(() => {
+    setNoteDraft(stepChangeNotes[stepIndex] ?? '');
+    setNoteEditorOpen(true);
+  }, [stepChangeNotes, stepIndex]);
+
+  const saveStepNote = useCallback(() => {
+    const trimmed = noteDraft.trim();
+    setStepChangeNotes(prev => {
+      const next = { ...prev };
+      if (trimmed) next[stepIndex] = trimmed;
+      else delete next[stepIndex];
+      return next;
+    });
+    setNoteEditorOpen(false);
+    if (trimmed) void haptic('light');
+  }, [noteDraft, stepIndex]);
+
+  // One "Step title: note" line per captured deviation, seeding the branch note.
+  const collectedChangeNotes = useMemo(() => {
+    return Object.entries(stepChangeNotes)
+      .map(([i, note]) => [Number(i), note] as const)
+      .sort((a, b) => a[0] - b[0])
+      .map(([i, note]) => `${recipe.steps[i]?.title ?? `Step ${i + 1}`}: ${note}`)
+      .join('\n');
+  }, [stepChangeNotes, recipe.steps]);
+
+  const recordCook = useCallback(async () => {
     try {
       await saveRecipeNotes(recipe.id, { lastCookedAt: Date.now() });
     } catch { /* non-blocking */ }
+  }, [recipe.id]);
+
+  const finishAsWritten = useCallback(async () => {
+    void haptic('success');
+    setFinishSheetOpen(false);
+    await recordCook();
     onExit();
-  }, [recipe.id, onExit]);
+  }, [recordCook, onExit]);
+
+  const finishWithBranch = useCallback(async (branchName: string, branchNote: string) => {
+    setSavingBranch(true);
+    try {
+      await ctx.branchRecipe(recipe, { branchName, branchNote: branchNote || undefined });
+      void haptic('success');
+      setFinishSheetOpen(false);
+      showToast(`"${branchName}" saved as a draft branch`);
+      await recordCook();
+      onExit();
+    } catch {
+      showToast('Could not save branch');
+    } finally {
+      setSavingBranch(false);
+    }
+  }, [ctx, recipe, recordCook, onExit, showToast]);
 
   const addToShoppingList = useCallback(async () => {
     try {
@@ -133,6 +193,8 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // The finish dialog owns the keyboard (its focus trap handles Escape).
+      if (finishSheetOpen) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'ArrowRight' && stepIndex < recipe.steps.length - 1) {
         e.preventDefault();
@@ -150,7 +212,7 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [stepIndex, recipe.steps.length, step.timer, onStepChange, confirmExit, handleTimerPress]);
+  }, [stepIndex, recipe.steps.length, step.timer, onStepChange, confirmExit, handleTimerPress, finishSheetOpen]);
 
   const stepMotion = reducedMotion
     ? {}
@@ -334,6 +396,64 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
                 </p>
               </div>
 
+              <div className="w-full max-w-lg mx-auto">
+                {noteEditorOpen ? (
+                  <div className="rounded-2xl border border-outline-variant/40 p-4 space-y-3 text-left">
+                    <label
+                      htmlFor="step-change-note"
+                      className="block text-[10px] font-label uppercase tracking-widest opacity-60"
+                    >
+                      What did you do differently?
+                    </label>
+                    <textarea
+                      id="step-change-note"
+                      value={noteDraft}
+                      onChange={e => setNoteDraft(e.target.value)}
+                      rows={2}
+                      placeholder="Browned the butter instead of just melting it…"
+                      className="w-full rounded-xl border border-outline-variant bg-transparent px-3 py-2 text-sm text-inherit placeholder:opacity-50 focus:ring-2 focus:ring-primary/20"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNoteEditorOpen(false)}
+                        className="px-4 py-2 rounded-full border border-outline-variant text-[10px] font-label uppercase tracking-widest min-h-[40px]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveStepNote}
+                        className="px-4 py-2 rounded-full bg-primary text-on-primary text-[10px] font-label uppercase tracking-widest font-bold min-h-[40px]"
+                      >
+                        Save note
+                      </button>
+                    </div>
+                  </div>
+                ) : stepChangeNotes[stepIndex] ? (
+                  <button
+                    type="button"
+                    onClick={openNoteEditor}
+                    className="w-full flex items-start gap-3 rounded-2xl border border-primary/30 bg-primary/8 px-4 py-3 text-left"
+                  >
+                    <GitBranch size={16} className="text-primary shrink-0 mt-0.5" aria-hidden />
+                    <span className="text-sm italic leading-snug min-w-0">{stepChangeNotes[stepIndex]}</span>
+                    <span className="ml-auto shrink-0 text-[9px] font-label uppercase tracking-widest opacity-60 mt-1">
+                      Edit
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={openNoteEditor}
+                    className="inline-flex items-center gap-2 rounded-full border border-outline-variant px-4 py-3 text-[10px] font-label uppercase tracking-widest hover:bg-surface-container transition-colors min-h-[44px]"
+                  >
+                    <GitBranch size={14} aria-hidden />
+                    I did this differently
+                  </button>
+                )}
+              </div>
+
               {recipe.ingredients.length > 0 ? (
                 <div className="w-full max-w-lg mx-auto text-left rounded-2xl border border-outline-variant/30 bg-surface-container-low/60 px-4 py-5 sm:px-6 sm:py-6">
                   <div className="flex items-center gap-2 mb-4 text-[10px] font-label uppercase tracking-widest opacity-50">
@@ -463,9 +583,9 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
               Previous
             </button>
             {stepIndex === recipe.steps.length - 1 ? (
-              <button 
+              <button
                 type="button"
-                onClick={() => void finishCooking()}
+                onClick={() => { void haptic('light'); setFinishSheetOpen(true); }}
                 className="px-4 sm:px-8 py-3.5 rounded-full bg-secondary text-on-primary font-label uppercase tracking-widest text-[10px] sm:text-xs font-bold shrink-0 min-h-[44px]"
               >
                 Finish Cooking
@@ -489,6 +609,23 @@ export const CookingModeScreen: React.FC<CookingModeScreenProps> = ({
         confirmLabel="Exit"
         onConfirm={() => { setConfirmExitOpen(false); onExit(); }}
         onCancel={() => setConfirmExitOpen(false)}
+      />
+      <BranchDialog
+        open={finishSheetOpen}
+        sourceTitle={recipe.title}
+        heading="How did it go?"
+        subheading={
+          collectedChangeNotes
+            ? 'You did some things differently — save them as a branch so this version isn’t lost.'
+            : 'Cooked it your own way? Save your changes as a branch of this recipe.'
+        }
+        confirmLabel="Save as branch"
+        skipLabel="Cooked as written"
+        initialNote={collectedChangeNotes}
+        busy={savingBranch}
+        onConfirm={(name, note) => void finishWithBranch(name, note)}
+        onSkip={() => void finishAsWritten()}
+        onCancel={() => setFinishSheetOpen(false)}
       />
     </motion.div>
     </SwipeBackWrapper>

@@ -22,6 +22,9 @@ export interface RecipePayload {
   isHeirloom?: boolean;
   sourceUrl?: string;
   draft?: boolean;
+  parentId?: string;
+  branchName?: string;
+  branchNote?: string;
 }
 
 const DIFFICULTIES = new Set(['Easy', 'Medium', 'Advanced', 'Expert']);
@@ -151,5 +154,8 @@ export function parseRecipePayload(v: unknown): RecipePayload | null {
     isHeirloom: o.isHeirloom === true,
     sourceUrl: typeof o.sourceUrl === 'string' && o.sourceUrl.trim() ? o.sourceUrl.trim() : undefined,
     draft: o.draft === true ? true : undefined,
+    parentId: typeof o.parentId === 'string' && o.parentId.trim() ? o.parentId.trim().slice(0, 120) : undefined,
+    branchName: typeof o.branchName === 'string' && o.branchName.trim() ? o.branchName.trim().slice(0, 80) : undefined,
+    branchNote: typeof o.branchNote === 'string' && o.branchNote.trim() ? o.branchNote.trim().slice(0, 2000) : undefined,
   };
 }
