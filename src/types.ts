@@ -49,4 +49,14 @@ export interface Recipe {
    * the user finishes the wizard.
    */
   draft?: boolean;
+  /**
+   * Id of the recipe this one was branched from. A branch is a full copy —
+   * the diff against the parent is computed at render time, so a branch keeps
+   * working as a normal recipe if its parent is ever deleted.
+   */
+  parentId?: string;
+  /** Short label for what this branch is, e.g. "Brown butter" */
+  branchName?: string;
+  /** What changed, in the cook's own words — captured when the branch is created */
+  branchNote?: string;
 }

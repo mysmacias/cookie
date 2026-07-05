@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, SquareCheck, ListX, ArrowUpDown, LayoutGrid, ChefHat, Tag, X } from 'lucide-react';
+import { Plus, Search, SquareCheck, ListX, ArrowUpDown, LayoutGrid, ChefHat, Network, Tag, X } from 'lucide-react';
 import { FilterMenu } from './FilterMenu';
 import { SORT_OPTIONS, type LibrarySort, type LibraryScope } from '../hooks/useLibraryFilters';
 
@@ -21,6 +21,7 @@ interface LibraryToolbarProps {
   onCookTogether?: () => void;
   cookTogetherCount?: number;
   onAddRecipe: () => void;
+  onOpenGraph: () => void;
   gridCols: number;
   setGridCols: (cols: number) => void;
   cuisines: string[];
@@ -43,6 +44,7 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
   filteredCount, onExportList, onExportSelected,
   onCookTogether, cookTogetherCount = 0,
   onAddRecipe,
+  onOpenGraph,
   gridCols, setGridCols,
   cuisines, cuisineFilters, toggleCuisineFilter, clearCuisineFilters,
   allTags, tagFilters, toggleTagFilter, clearTagFilters,
@@ -141,6 +143,14 @@ export const LibraryToolbar: React.FC<LibraryToolbarProps> = ({
         <div className="ml-auto flex flex-wrap items-center gap-3">
           {!selectionMode ? (
             <>
+              <button
+                type="button"
+                onClick={onOpenGraph}
+                className="border border-outline-variant px-4 py-2 rounded-full text-xs font-label uppercase tracking-widest flex items-center gap-2 hover:border-primary hover:text-primary transition-colors"
+              >
+                <Network size={14} />
+                Graph
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectionMode(true)}

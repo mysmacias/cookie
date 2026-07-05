@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { UtensilsCrossed, Pencil, Trash2 } from 'lucide-react';
+import { UtensilsCrossed, Pencil, Trash2, GitBranch } from 'lucide-react';
 import type { Recipe } from '../types';
 
 interface DraftCardProps {
@@ -44,10 +44,16 @@ export const DraftCard: React.FC<DraftCardProps> = ({ recipe, onResume, onDiscar
           </div>
         )}
 
-        <div className="absolute top-4 left-4 z-20">
+        <div className="absolute top-4 left-4 z-20 flex flex-wrap gap-1.5">
           <span className="bg-surface/75 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-label uppercase tracking-widest border border-outline-variant/30 text-on-surface-variant">
             Draft
           </span>
+          {recipe.branchName ? (
+            <span className="inline-flex items-center gap-1 bg-surface/75 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-label uppercase tracking-widest border border-outline-variant/30 text-primary">
+              <GitBranch size={10} aria-hidden />
+              {recipe.branchName}
+            </span>
+          ) : null}
         </div>
 
         <button

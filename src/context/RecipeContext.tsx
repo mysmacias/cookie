@@ -16,6 +16,7 @@ import {
   isBookmarked as storeIsBookmarked,
   getBookmarkedIds as storeBookmarkedIds,
 } from '../services/recipeStore';
+import { buildBranchPayload } from '../utils/recipeBranch';
 
 interface RecipeContextValue {
   recipes: Recipe[];
@@ -26,6 +27,8 @@ interface RecipeContextValue {
   updateRecipe: (recipe: Recipe) => Promise<void>;
   deleteRecipe: (id: string) => Promise<void>;
   duplicateRecipe: (id: string) => Promise<Recipe>;
+  /** Create a draft branch (variation) of a recipe; publish it via the wizard */
+  branchRecipe: (source: Recipe, opts: { branchName: string; branchNote?: string }) => Promise<Recipe>;
   toggleBookmark: (id: string) => Promise<boolean>;
   isBookmarked: (id: string) => boolean;
   refreshRecipes: () => Promise<void>;
@@ -104,6 +107,12 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return created;
   }, [syncFromCache]);
 
+  const branchRecipe = useCallback(async (source: Recipe, opts: { branchName: string; branchNote?: string }) => {
+    const created = await createRecipe(buildBranchPayload(source, opts));
+    syncFromCache();
+    return created;
+  }, [syncFromCache]);
+
   const toggleBookmark = useCallback(async (id: string) => {
     const newState = await toggleBookmarkApi(id);
     setBookmarkedIds(storeBookmarkedIds());
@@ -123,11 +132,12 @@ export const RecipeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     updateRecipe,
     deleteRecipe,
     duplicateRecipe,
+    branchRecipe,
     toggleBookmark,
     isBookmarked,
     refreshRecipes: refresh,
     version,
-  }), [recipes, drafts, bookmarkedIds, isLoading, addRecipe, updateRecipe, deleteRecipe, duplicateRecipe, toggleBookmark, isBookmarked, refresh, version]);
+  }), [recipes, drafts, bookmarkedIds, isLoading, addRecipe, updateRecipe, deleteRecipe, duplicateRecipe, branchRecipe, toggleBookmark, isBookmarked, refresh, version]);
 
   return (
     <RecipeContext.Provider value={value}>
