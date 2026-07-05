@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft } from 'lucide-react';
+import { Check, ChevronLeft } from 'lucide-react';
 import type { Recipe } from '../types';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
+import { Button } from '../components/ui/Button';
 import { useRecipeForm } from '../hooks/useRecipeForm';
 import { WizardStepper } from './add-recipe/WizardStepper';
 import { RecipeFormBasics } from './add-recipe/RecipeFormBasics';
@@ -98,14 +99,41 @@ export const AddRecipeScreen: React.FC<AddRecipeScreenProps> = ({ onBack, editin
         animate={{ opacity: 1, y: 0 }}
         className="max-w-3xl mx-auto space-y-10"
       >
-        <button
-          type="button"
-          onClick={handleBack}
-          className="flex items-center space-x-2 text-sm font-label uppercase tracking-widest hover:text-primary transition-colors"
-        >
-          <ChevronLeft size={16} />
-          <span>Back</span>
-        </button>
+        <div className="flex items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="flex items-center space-x-2 text-sm font-label uppercase tracking-widest hover:text-primary transition-colors"
+          >
+            <ChevronLeft size={16} />
+            <span>Back</span>
+          </button>
+
+          <div className="flex items-center gap-3">
+            {form.saveState === 'error' && (
+              <span role="alert" className="text-xs text-secondary">
+                Couldn't save — try again
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void form.saveDraft()}
+              disabled={!form.title.trim() || form.saveState === 'saving' || submitting}
+              title={form.title.trim() ? undefined : 'Name your recipe first'}
+              icon={form.saveState === 'saved' ? <Check size={12} aria-hidden /> : undefined}
+              aria-live="polite"
+            >
+              {form.saveState === 'saving'
+                ? 'Saving…'
+                : form.saveState === 'saved'
+                ? 'Saved'
+                : isPublishedEdit
+                ? 'Save changes'
+                : 'Save draft'}
+            </Button>
+          </div>
+        </div>
 
         <div className="space-y-4">
           <h1 className="text-6xl font-headline italic">

@@ -96,6 +96,51 @@ describe('useRecipeForm draft autosave and publish', () => {
     expect(onBack).toHaveBeenCalled();
   });
 
+  it('saveDraft persists immediately and reports saved, then returns to idle', async () => {
+    const { result } = renderHook(() => useRecipeForm(null));
+    act(() => result.current.setTitle('Lemon Tart'));
+
+    await act(async () => {
+      await result.current.saveDraft();
+    });
+
+    expect(addRecipe).toHaveBeenCalledTimes(1);
+    expect(addRecipe.mock.calls[0][0]).toMatchObject({ title: 'Lemon Tart', draft: true });
+    expect(result.current.saveState).toBe('saved');
+
+    await act(async () => {
+      vi.advanceTimersByTime(2100);
+      await Promise.resolve();
+    });
+    expect(result.current.saveState).toBe('idle');
+  });
+
+  it('saveDraft does nothing without a title', async () => {
+    const { result } = renderHook(() => useRecipeForm(null));
+    await act(async () => {
+      await result.current.saveDraft();
+    });
+    expect(addRecipe).not.toHaveBeenCalled();
+    expect(result.current.saveState).toBe('idle');
+  });
+
+  it('saveDraft reports an error when the save fails', async () => {
+    addRecipe.mockRejectedValueOnce(new Error('network down'));
+    const { result } = renderHook(() => useRecipeForm(null));
+    act(() => result.current.setTitle('Lemon Tart'));
+
+    await act(async () => {
+      await result.current.saveDraft();
+    });
+    expect(result.current.saveState).toBe('error');
+
+    // A retry that succeeds recovers to "saved".
+    await act(async () => {
+      await result.current.saveDraft();
+    });
+    expect(result.current.saveState).toBe('saved');
+  });
+
   it('keeps the draft and re-arms autosave when publishing fails', async () => {
     const { result } = renderHook(() => useRecipeForm(null));
     act(() => result.current.setTitle('Lemon Tart'));
