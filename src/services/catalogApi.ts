@@ -12,6 +12,8 @@ export interface CatalogPreview {
   tags: string[];
   sourceUrl?: string;
   sourceDomain?: string;
+  /** Display name of the user who published this recipe, for community rows */
+  author?: string;
 }
 
 export interface CatalogSearchResult {
@@ -46,4 +48,24 @@ export async function importRecipeFromCatalog(id: string): Promise<Recipe> {
     body: JSON.stringify({ id }),
   });
   return data.recipe;
+}
+
+/** Ids of the current user's recipes that are published to the shared catalog. */
+export async function fetchPublishedRecipeIds(): Promise<string[]> {
+  const data = await apiFetch<{ ids: string[] }>('/api/catalog/publish');
+  return data.ids;
+}
+
+export async function publishRecipeToCatalog(id: string): Promise<void> {
+  await apiFetch('/api/catalog/publish', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+export async function unpublishRecipeFromCatalog(id: string): Promise<void> {
+  await apiFetch('/api/catalog/publish', {
+    method: 'DELETE',
+    body: JSON.stringify({ id }),
+  });
 }

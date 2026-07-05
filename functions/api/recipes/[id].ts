@@ -83,6 +83,8 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
       .bind(recipeId, userOrResponse.id),
     env.DB.prepare('DELETE FROM recipe_notes WHERE user_id = ? AND recipe_id = ?').bind(userOrResponse.id, recipeId),
     env.DB.prepare('DELETE FROM shared_recipes WHERE user_id = ? AND recipe_id = ?').bind(userOrResponse.id, recipeId),
+    // Deleting a recipe also withdraws the copy the user published to the catalog.
+    env.DB.prepare('DELETE FROM recipes WHERE id = ? AND published_by = ?').bind(recipeId, userOrResponse.id),
   ]);
 
   await deleteMediaKeys(env, mediaKeys);
