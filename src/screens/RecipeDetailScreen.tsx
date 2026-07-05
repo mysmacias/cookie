@@ -28,7 +28,8 @@ import { ExportRecipeModal } from '../components/ExportRecipeModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BranchDialog } from '../components/BranchDialog';
 import { RecipeFamilyPanel } from '../components/RecipeFamilyPanel';
-import { branchLabel, getParentRecipe } from '../utils/recipeBranch';
+import { getParentRecipe } from '../utils/recipeBranch';
+import { VariationSwitcher } from '../components/VariationSwitcher';
 import { useToast } from '../components/ui/Toast';
 import { Label } from '../components/ui/Label';
 import { useRecipes } from '../context/RecipeContext';
@@ -286,23 +287,19 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
                   Last cooked {lastCookedLabel}
                 </span>
               ) : null}
-              {parentRecipe ? (
-                <button
-                  type="button"
-                  onClick={() => parentRecipe.draft ? navigateTo('add', parentRecipe) : navigateTo('detail', parentRecipe)}
-                  className="inline-flex items-center gap-1.5 text-[10px] font-label uppercase tracking-widest text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors print:hidden"
-                  title={`Open ${parentRecipe.title}`}
-                >
-                  <GitBranch size={12} aria-hidden />
-                  <span>Branch of {branchLabel(parentRecipe)}</span>
-                </button>
-              ) : recipe.branchName ? (
+              {!parentRecipe && recipe.branchName ? (
                 <span className="inline-flex items-center gap-1.5 text-[10px] font-label uppercase tracking-widest text-primary bg-primary/10 px-3 py-1.5 rounded-full">
                   <GitBranch size={12} aria-hidden />
                   <span>{recipe.branchName}</span>
                 </span>
               ) : null}
             </div>
+            <VariationSwitcher
+              recipe={recipe}
+              allRecipes={allWithDrafts}
+              onOpenRecipe={r => navigateTo('detail', r)}
+              onOpenDraft={r => navigateTo('add', r)}
+            />
             <h1 className="text-6xl md:text-8xl font-headline italic leading-none tracking-tight">
               {recipe.title}
             </h1>
@@ -407,12 +404,7 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
             </div>
           </div>
 
-          <RecipeFamilyPanel
-            recipe={recipe}
-            allRecipes={allWithDrafts}
-            onOpenRecipe={r => navigateTo('detail', r)}
-            onOpenDraft={r => navigateTo('add', r)}
-          />
+          <RecipeFamilyPanel recipe={recipe} allRecipes={allWithDrafts} />
 
           <div className="flex flex-wrap items-center gap-3 print:hidden">
             <button

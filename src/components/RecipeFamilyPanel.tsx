@@ -1,20 +1,13 @@
 import React, { useMemo } from 'react';
-import { GitBranch, ChevronRight } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import type { Recipe } from '../types';
 import { Label } from './ui/Label';
-import {
-  branchLabel,
-  diffRecipes,
-  getParentRecipe,
-  getRecipeFamily,
-} from '../utils/recipeBranch';
+import { branchLabel, diffRecipes, getParentRecipe } from '../utils/recipeBranch';
 
 interface RecipeFamilyPanelProps {
   recipe: Recipe;
-  /** Published recipes plus drafts, so unpublished branches show up too */
+  /** Published recipes plus drafts, so a draft parent still resolves */
   allRecipes: Recipe[];
-  onOpenRecipe: (recipe: Recipe) => void;
-  onOpenDraft: (recipe: Recipe) => void;
 }
 
 const DiffTag: React.FC<{ kind: 'add' | 'remove' | 'change' }> = ({ kind }) => (
@@ -33,21 +26,19 @@ const DiffTag: React.FC<{ kind: 'add' | 'remove' | 'change' }> = ({ kind }) => (
 );
 
 /**
- * The "family" card on the recipe detail screen: the recipe's lineage tree
- * (root plus every branch, drafts included) and, for branches, what changed
- * compared to the parent. Renders nothing for recipes with no relatives.
+ * The "what changed" card on the recipe detail screen: a branch's note and
+ * its diff against the parent. Hopping between versions lives in the
+ * VariationSwitcher chips next to the title; this panel only describes the
+ * version being viewed, so it renders nothing for family roots.
  */
 export const RecipeFamilyPanel: React.FC<RecipeFamilyPanelProps> = ({
   recipe,
   allRecipes,
-  onOpenRecipe,
-  onOpenDraft,
 }) => {
-  const family = useMemo(() => getRecipeFamily(allRecipes, recipe), [allRecipes, recipe]);
   const parent = useMemo(() => getParentRecipe(allRecipes, recipe), [allRecipes, recipe]);
   const diff = useMemo(() => (parent ? diffRecipes(parent, recipe) : null), [parent, recipe]);
 
-  if (family.length <= 1 && !parent && !recipe.branchNote) return null;
+  if (!parent && !recipe.branchNote) return null;
 
   const diffLines: { kind: 'add' | 'remove' | 'change'; text: string }[] = [];
   if (diff) {
@@ -70,51 +61,8 @@ export const RecipeFamilyPanel: React.FC<RecipeFamilyPanelProps> = ({
     <div className="print:hidden space-y-5 rounded-2xl border border-outline-variant/30 p-5">
       <div className="flex items-center gap-2">
         <GitBranch size={16} className="text-primary" aria-hidden />
-        <Label>Recipe family</Label>
+        <Label>This variation</Label>
       </div>
-
-      {family.length > 1 ? (
-        <ul className="space-y-1">
-          {family.map(({ recipe: member, depth }) => {
-            const isCurrent = member.id === recipe.id;
-            return (
-              <li key={member.id} style={{ paddingLeft: `${Math.min(depth, 4) * 16}px` }}>
-                <button
-                  type="button"
-                  disabled={isCurrent}
-                  onClick={() => (member.draft ? onOpenDraft(member) : onOpenRecipe(member))}
-                  className={`group w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-sm transition-colors ${
-                    isCurrent ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="truncate">{branchLabel(member)}</span>
-                  {depth === 0 ? (
-                    <span className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant shrink-0">
-                      original
-                    </span>
-                  ) : null}
-                  {member.draft ? (
-                    <span className="text-[9px] font-label uppercase tracking-widest text-secondary bg-secondary/10 px-2 py-0.5 rounded-full shrink-0">
-                      draft
-                    </span>
-                  ) : null}
-                  {isCurrent ? (
-                    <span className="text-[9px] font-label uppercase tracking-widest shrink-0 ml-auto">
-                      you're here
-                    </span>
-                  ) : (
-                    <ChevronRight
-                      size={14}
-                      className="ml-auto shrink-0 opacity-0 group-hover:opacity-60 transition-opacity"
-                      aria-hidden
-                    />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
 
       {recipe.branchNote ? (
         <div className="space-y-1">
