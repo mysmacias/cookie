@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { useNavigation, Screen, isResetPasswordRoute } from './hooks/useNavigation';
+import { useNavigation, Screen, isResetPasswordRoute, type GraphSource } from './hooks/useNavigation';
 import { useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -39,6 +39,7 @@ export default function App() {
     currentScreen,
     routeRecipeId,
     graphFocusId,
+    graphSource,
     collectionId,
     shareToken,
     cookPlanRecipeIds,
@@ -81,7 +82,7 @@ export default function App() {
     screen: Screen,
     recipe?: Recipe,
     cookPlanIds?: string[],
-    options?: { collectionId?: string; shareToken?: string },
+    options?: { collectionId?: string; shareToken?: string; graphSource?: GraphSource },
   ) => {
     if (screen === 'add' && recipe === undefined) {
       setEditingRecipe(null);
@@ -208,11 +209,15 @@ export default function App() {
               startCooking={startCooking}
               onResumeDraft={openEditRecipe}
               onCookTogether={ids => navigateToCookPlan(ids)}
+              onOpenGraph={() => navigateTo('graph')}
             />
           )}
 
           {currentScreen === 'discover' && (
-            <DiscoverRecipesScreen navigateTo={navigateTo} />
+            <DiscoverRecipesScreen
+              navigateTo={navigateTo}
+              onOpenGraph={() => navigateTo('graph', undefined, undefined, { graphSource: 'discover' })}
+            />
           )}
 
           {currentScreen === 'detail' && recipeResolved && (
@@ -297,6 +302,7 @@ export default function App() {
                 navigateTo={navigateTo}
                 startCooking={startCooking}
                 focusRecipeId={graphFocusId}
+                source={graphSource}
                 onCookTogether={ids => navigateToCookPlan(ids)}
               />
             </Suspense>
