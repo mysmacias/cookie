@@ -5,6 +5,11 @@ import { useRecipes } from '../context/RecipeContext';
 type PersistSnap = {
   editId: string | null;
   isHeirloom?: boolean;
+  // Lineage travels outside the form payload (like isHeirloom) so saving a
+  // branch through the wizard never severs it from its parent.
+  parentId?: string;
+  branchName?: string;
+  branchNote?: string;
   payload: Omit<Recipe, 'id'>;
 };
 
@@ -78,6 +83,9 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
   formSnapRef.current = {
     editId: editingRecipe?.id ?? null,
     isHeirloom: editingRecipe?.isHeirloom,
+    parentId: editingRecipe?.parentId,
+    branchName: editingRecipe?.branchName,
+    branchNote: editingRecipe?.branchNote,
     payload: buildPayload(),
   };
 
@@ -123,6 +131,9 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
       await ctx.updateRecipe({
         id: snap.editId,
         isHeirloom: snap.isHeirloom,
+        parentId: snap.parentId,
+        branchName: snap.branchName,
+        branchNote: snap.branchNote,
         ...snap.payload,
         draft: keepDraft ? true : undefined,
       });
@@ -349,7 +360,14 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
       }
       const payload = buildPayload();
       if (editingRecipe) {
-        await ctx.updateRecipe({ id: editingRecipe.id, isHeirloom: editingRecipe.isHeirloom, ...payload });
+        await ctx.updateRecipe({
+          id: editingRecipe.id,
+          isHeirloom: editingRecipe.isHeirloom,
+          parentId: editingRecipe.parentId,
+          branchName: editingRecipe.branchName,
+          branchNote: editingRecipe.branchNote,
+          ...payload,
+        });
       } else if (draftIdRef.current) {
         await ctx.updateRecipe({ id: draftIdRef.current, ...payload });
       } else {

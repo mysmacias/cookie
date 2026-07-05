@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   ChevronLeft,
@@ -18,12 +18,16 @@ import {
   Copy,
   ShoppingCart,
   Star,
+  GitBranch,
 } from 'lucide-react';
 import { Recipe } from '../types';
 import { Screen } from '../hooks/useNavigation';
 import { SwipeBackWrapper } from '../components/SwipeBackWrapper';
 import { ExportRecipeModal } from '../components/ExportRecipeModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { BranchDialog } from '../components/BranchDialog';
+import { RecipeFamilyPanel } from '../components/RecipeFamilyPanel';
+import { branchLabel, getParentRecipe } from '../utils/recipeBranch';
 import { useToast } from '../components/ui/Toast';
 import { Label } from '../components/ui/Label';
 import { useRecipes } from '../context/RecipeContext';
@@ -72,6 +76,8 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
   const [lastCookedAt, setLastCookedAt] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [branchOpen, setBranchOpen] = useState(false);
+  const [branching, setBranching] = useState(false);
   const notesSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { showToast } = useToast();
   const reducedMotion = useReducedMotion();
@@ -171,6 +177,21 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
     }
   };
 
+  const handleCreateBranch = async (name: string, note: string) => {
+    setBranching(true);
+    try {
+      const branch = await ctx.branchRecipe(recipe, { branchName: name, branchNote: note || undefined });
+      setBranchOpen(false);
+      showToast(`"${name}" branched — make it yours`);
+      // Straight into the wizard so the changes get made while they're fresh.
+      navigateTo('add', branch);
+    } catch {
+      showToast('Could not create branch');
+    } finally {
+      setBranching(false);
+    }
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -184,6 +205,10 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
       setConfirmDelete(false);
     }
   };
+
+  // Drafts included so unpublished branches appear in the family tree.
+  const allWithDrafts = useMemo(() => [...ctx.recipes, ...ctx.drafts], [ctx.recipes, ctx.drafts]);
+  const parentRecipe = useMemo(() => getParentRecipe(allWithDrafts, recipe), [allWithDrafts, recipe]);
 
   const lastCookedLabel = formatLastCooked(lastCookedAt);
   const baseYields = recipe.yields ? parseInt(recipe.yields, 10) : NaN;
@@ -219,6 +244,22 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
               {lastCookedLabel ? (
                 <span className="inline-flex text-[10px] font-label uppercase tracking-widest text-primary bg-primary/10 px-3 py-1.5 rounded-full">
                   Last cooked {lastCookedLabel}
+                </span>
+              ) : null}
+              {parentRecipe ? (
+                <button
+                  type="button"
+                  onClick={() => parentRecipe.draft ? navigateTo('add', parentRecipe) : navigateTo('detail', parentRecipe)}
+                  className="inline-flex items-center gap-1.5 text-[10px] font-label uppercase tracking-widest text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors print:hidden"
+                  title={`Open ${parentRecipe.title}`}
+                >
+                  <GitBranch size={12} aria-hidden />
+                  <span>Branch of {branchLabel(parentRecipe)}</span>
+                </button>
+              ) : recipe.branchName ? (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-label uppercase tracking-widest text-primary bg-primary/10 px-3 py-1.5 rounded-full">
+                  <GitBranch size={12} aria-hidden />
+                  <span>{recipe.branchName}</span>
                 </span>
               ) : null}
             </div>
@@ -326,6 +367,13 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
             </div>
           </div>
 
+          <RecipeFamilyPanel
+            recipe={recipe}
+            allRecipes={allWithDrafts}
+            onOpenRecipe={r => navigateTo('detail', r)}
+            onOpenDraft={r => navigateTo('add', r)}
+          />
+
           <div className="flex flex-wrap items-center gap-3 print:hidden">
             <button
               type="button"
@@ -345,6 +393,9 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
             </button>
             <button type="button" onClick={onEditRecipe} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container" aria-label="Edit recipe" title="Edit recipe">
               <Pencil size={20} />
+            </button>
+            <button type="button" onClick={() => setBranchOpen(true)} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container" aria-label="Branch recipe" title="Branch this recipe — save your own variation">
+              <GitBranch size={20} />
             </button>
             <button type="button" onClick={() => void handleDuplicate()} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container" aria-label="Duplicate recipe" title="Duplicate recipe">
               <Copy size={20} />
@@ -457,6 +508,14 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
       </div>
 
       <ExportRecipeModal recipes={[recipe]} open={exportOpen} onClose={() => setExportOpen(false)} onFeedback={showToast} />
+
+      <BranchDialog
+        open={branchOpen}
+        sourceTitle={recipe.title}
+        busy={branching}
+        onConfirm={(name, note) => void handleCreateBranch(name, note)}
+        onCancel={() => setBranchOpen(false)}
+      />
 
       <ConfirmDialog
         open={confirmDelete}

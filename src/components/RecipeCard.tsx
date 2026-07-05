@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { motion } from 'motion/react';
-import { Clock, Flame, Heart, ArrowRight, UtensilsCrossed, ImagePlus, Check } from 'lucide-react';
+import { Clock, Flame, Heart, ArrowRight, UtensilsCrossed, ImagePlus, Check, GitBranch } from 'lucide-react';
 import { Recipe } from '../types';
 import { useImagePicker } from '../hooks/useImagePicker';
 import { HiddenFileInputs } from './HiddenFileInputs';
@@ -146,11 +146,19 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
         >
           <Heart size={16} fill={isBookmarked ? 'currentColor' : 'none'} strokeWidth={2} />
         </button>
-        {recipe.isHeirloom && (
-          <div className="absolute bottom-4 left-4 z-10">
-            <span className="bg-secondary/95 text-on-primary backdrop-blur px-2.5 py-1 rounded-full text-[9px] font-label uppercase tracking-widest">
-              Heirloom
-            </span>
+        {(recipe.isHeirloom || recipe.parentId || recipe.branchName) && (
+          <div className="absolute bottom-4 left-4 z-10 flex flex-wrap gap-1.5 max-w-[calc(100%-6rem)]">
+            {recipe.isHeirloom && (
+              <span className="bg-secondary/95 text-on-primary backdrop-blur px-2.5 py-1 rounded-full text-[9px] font-label uppercase tracking-widest">
+                Heirloom
+              </span>
+            )}
+            {(recipe.parentId || recipe.branchName) && (
+              <span className="inline-flex items-center gap-1 bg-surface/75 text-primary backdrop-blur px-2.5 py-1 rounded-full text-[9px] font-label uppercase tracking-widest border border-outline-variant/20">
+                <GitBranch size={10} aria-hidden />
+                {recipe.branchName || 'Branch'}
+              </span>
+            )}
           </div>
         )}
         {selectionMode ? (
