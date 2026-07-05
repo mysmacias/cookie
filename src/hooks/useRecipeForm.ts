@@ -178,6 +178,30 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     void performSaveRef.current();
   }, []);
 
+  // Manual "save draft" button: same persistence path as autosave, but with
+  // visible progress/confirmation so the cook can bank their work on demand.
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const savedResetRef = useRef<number | null>(null);
+
+  const saveDraft = useCallback(async () => {
+    if (!formSnapRef.current.payload.title.trim()) return;
+    if (savedResetRef.current) window.clearTimeout(savedResetRef.current);
+    setSaveState('saving');
+    try {
+      await performSaveRef.current();
+      setSaveState('saved');
+      savedResetRef.current = window.setTimeout(() => setSaveState('idle'), 2000);
+    } catch {
+      setSaveState('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (savedResetRef.current) window.clearTimeout(savedResetRef.current);
+    };
+  }, []);
+
   // Persist on unmount (e.g. browser back / swipe) so drafts and edits survive.
   useEffect(() => {
     return () => {
@@ -360,6 +384,7 @@ export function useRecipeForm(editingRecipe: Recipe | null | undefined, onSaved?
     stepTimer, setStepTimer,
     stepIngredientPick, setStepIngredientPick,
     buildPayload, persistNow, resetForNew,
+    saveDraft, saveState,
     commitTag, addIngredient, addIngredientsBulk, removeIngredient, editIngredient,
     toggleStepIngredientIndex, addStep, removeStep, moveStep, editStep,
     submit,
