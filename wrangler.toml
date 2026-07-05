@@ -9,9 +9,7 @@ database_name = "cookie-db"
 database_id = "bfb956b9-aaf1-44d3-ab98-bbcf59ca90b0"
 migrations_dir = "migrations"
 
-# Requires R2 enabled on the account (Cloudflare dashboard, one-time) and the
-# bucket created: npx wrangler r2 bucket create cookie-media
-# Deploys fail until the bucket exists.
+# User-uploaded recipe photos (bucket created 2026-07-05).
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "cookie-media"
