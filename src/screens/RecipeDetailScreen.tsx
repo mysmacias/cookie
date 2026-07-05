@@ -18,6 +18,7 @@ import {
   Copy,
   ShoppingCart,
   Star,
+  Globe,
   GitBranch,
 } from 'lucide-react';
 import { Recipe } from '../types';
@@ -37,6 +38,11 @@ import { fetchRecipeNotes, saveRecipeNotes } from '../services/recipeNotesApi';
 import { fetchShoppingList, saveShoppingList } from '../services/shoppingListApi';
 import { buildShoppingItemsFromRecipes, mergeShoppingItems } from '../utils/shoppingList';
 import { createShareLink } from '../services/shareApi';
+import {
+  fetchPublishedRecipeIds,
+  publishRecipeToCatalog,
+  unpublishRecipeFromCatalog,
+} from '../services/catalogApi';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface RecipeDetailScreenProps {
@@ -76,15 +82,29 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
   const [lastCookedAt, setLastCookedAt] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
   const [branching, setBranching] = useState(false);
   const notesSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { showToast } = useToast();
   const reducedMotion = useReducedMotion();
 
+  // Only recipes the user authored can be shared to the Discover catalog.
+  const canPublish = recipe.id.startsWith('user_') && !recipe.draft;
+
   useEffect(() => {
     void fetchCollections().then(setCollections).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setIsPublished(false);
+    if (!canPublish) return;
+    void fetchPublishedRecipeIds()
+      .then(ids => setIsPublished(ids.includes(recipe.id)))
+      .catch(() => {});
+  }, [recipe.id, canPublish]);
 
   useEffect(() => {
     void fetchRecipeNotes(recipe.id).then(data => {
@@ -174,6 +194,26 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
       navigateTo('detail', copy);
     } catch {
       showToast('Could not duplicate recipe');
+    }
+  };
+
+  const handlePublishToggle = async () => {
+    setPublishing(true);
+    try {
+      if (isPublished) {
+        await unpublishRecipeFromCatalog(recipe.id);
+        setIsPublished(false);
+        showToast('Recipe removed from Discover');
+      } else {
+        await publishRecipeToCatalog(recipe.id);
+        setIsPublished(true);
+        showToast('Recipe published to Discover');
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not update publication');
+    } finally {
+      setPublishing(false);
+      setConfirmPublish(false);
     }
   };
 
@@ -406,6 +446,17 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
             <button type="button" aria-label="Share recipe link" title="Share recipe link" onClick={() => void shareRecipe()} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
               <Share2 size={20} />
             </button>
+            {canPublish ? (
+              <button
+                type="button"
+                onClick={() => setConfirmPublish(true)}
+                className={`p-5 rounded-full border transition-colors ${isPublished ? 'border-primary text-primary' : 'border-outline-variant hover:bg-surface-container'}`}
+                aria-label={isPublished ? 'Remove from Discover' : 'Publish to Discover'}
+                title={isPublished ? 'Published on Discover — click to remove' : 'Publish to Discover for everyone'}
+              >
+                <Globe size={20} />
+              </button>
+            ) : null}
             <button type="button" aria-label="Export recipe" title="Print or export recipe" onClick={() => setExportOpen(true)} className="p-5 rounded-full border border-outline-variant hover:bg-surface-container">
               <Printer size={20} />
             </button>
@@ -515,6 +566,19 @@ export const RecipeDetailScreen: React.FC<RecipeDetailScreenProps> = ({
         busy={branching}
         onConfirm={(name, note) => void handleCreateBranch(name, note)}
         onCancel={() => setBranchOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmPublish}
+        title={isPublished ? 'Remove from Discover?' : 'Publish to Discover?'}
+        message={
+          isPublished
+            ? `"${recipe.title}" will no longer appear in the shared Discover collection. Cooks who already saved it keep their copy.`
+            : `A copy of "${recipe.title}" will appear in Discover's Cookie collection for every cook, credited to your name. Step photos and private images stay in your library.`
+        }
+        confirmLabel={publishing ? (isPublished ? 'Removing…' : 'Publishing…') : isPublished ? 'Remove' : 'Publish'}
+        onConfirm={() => void handlePublishToggle()}
+        onCancel={() => setConfirmPublish(false)}
       />
 
       <ConfirmDialog

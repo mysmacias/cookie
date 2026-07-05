@@ -486,7 +486,9 @@ function CatalogResults({
                 {preview.description && !/^imported from /i.test(preview.description.trim()) ? (
                   <p className="text-on-surface-variant line-clamp-2">{preview.description}</p>
                 ) : null}
-                {preview.sourceDomain ? (
+                {preview.author ? (
+                  <p className="text-xs font-label uppercase tracking-widest text-secondary">Shared by {preview.author}</p>
+                ) : preview.sourceDomain ? (
                   <p className="text-xs font-label uppercase tracking-widest text-secondary">{preview.sourceDomain}</p>
                 ) : null}
               </div>

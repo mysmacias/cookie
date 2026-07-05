@@ -14,6 +14,8 @@ export interface CatalogPreview {
   tags: string[];
   sourceUrl?: string;
   sourceDomain?: string;
+  /** Display name of the user who published this recipe, for community rows */
+  author?: string;
 }
 
 interface CatalogRow {
@@ -21,6 +23,7 @@ interface CatalogRow {
   data: string;
   source_url: string | null;
   source_domain: string | null;
+  author: string | null;
 }
 
 // Escape LIKE wildcards in user input; we add our own % around the term.
@@ -41,6 +44,7 @@ function toPreview(row: CatalogRow): CatalogPreview {
     tags: Array.isArray(recipe.tags) ? (recipe.tags as string[]).slice(0, 6) : [],
     ...(row.source_url ? { sourceUrl: row.source_url } : {}),
     ...(row.source_domain ? { sourceDomain: row.source_domain } : {}),
+    ...(row.author ? { author: row.author } : {}),
   };
 }
 
@@ -66,9 +70,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       const pattern = likePattern(query);
       [rowsResult, countRow] = await Promise.all([
         env.DB.prepare(
-          `SELECT id, data, source_url, source_domain FROM recipes
-           WHERE title LIKE ?1 ESCAPE '\\' OR data LIKE ?1 ESCAPE '\\'
-           ORDER BY (title LIKE ?1 ESCAPE '\\') DESC, title ASC
+          `SELECT r.id, r.data, r.source_url, r.source_domain, u.name AS author
+           FROM recipes r LEFT JOIN users u ON u.id = r.published_by
+           WHERE r.title LIKE ?1 ESCAPE '\\' OR r.data LIKE ?1 ESCAPE '\\'
+           ORDER BY (r.title LIKE ?1 ESCAPE '\\') DESC, r.title ASC
            LIMIT ?2 OFFSET ?3`,
         ).bind(pattern, perPage, offset).all<CatalogRow>(),
         env.DB.prepare(
@@ -79,7 +84,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     } else {
       [rowsResult, countRow] = await Promise.all([
         env.DB.prepare(
-          'SELECT id, data, source_url, source_domain FROM recipes ORDER BY title ASC LIMIT ?1 OFFSET ?2',
+          `SELECT r.id, r.data, r.source_url, r.source_domain, u.name AS author
+           FROM recipes r LEFT JOIN users u ON u.id = r.published_by
+           ORDER BY r.title ASC LIMIT ?1 OFFSET ?2`,
         ).bind(perPage, offset).all<CatalogRow>(),
         env.DB.prepare('SELECT COUNT(*) AS n FROM recipes').first<{ n: number }>(),
       ]);
