@@ -1,18 +1,22 @@
 import type { Env } from '../../lib/env';
 import { requireUser, isValidEmail } from '../../lib/auth';
-import { getFriendship } from '../../lib/friends';
+import { acceptFriendship, getFriendship } from '../../lib/friends';
 import { checkRateLimit } from '../../lib/rateLimit';
 import { error, json } from '../../lib/response';
 
 interface FriendListRow {
   requester_id: string;
   addressee_id: string;
-  status: 'pending' | 'accepted';
-  created_at: number;
-  accepted_at: number | null;
+  status: 'pending' | 'accepted' | 'declined';
   friend_id: string;
   friend_name: string;
   friend_email: string;
+}
+
+interface FriendEntry {
+  id: string;
+  name: string;
+  email: string;
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
@@ -20,25 +24,23 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if (userOrResponse instanceof Response) return userOrResponse;
   const userId = userOrResponse.id;
 
+  // Declined rows stay visible to the requester as an ordinary outgoing
+  // invite — a decline should be indistinguishable from "not answered yet".
   const result = await env.DB.prepare(
-    `SELECT f.requester_id, f.addressee_id, f.status, f.created_at, f.accepted_at,
+    `SELECT f.requester_id, f.addressee_id, f.status,
             u.id AS friend_id, u.name AS friend_name, u.email AS friend_email
      FROM friendships f
      JOIN users u ON u.id = CASE WHEN f.requester_id = ?1 THEN f.addressee_id ELSE f.requester_id END
-     WHERE f.requester_id = ?1 OR f.addressee_id = ?1
+     WHERE (f.requester_id = ?1 OR f.addressee_id = ?1)
+       AND (f.status != 'declined' OR f.requester_id = ?1)
      ORDER BY f.created_at DESC`,
   ).bind(userId).all<FriendListRow>();
 
-  const friends: unknown[] = [];
-  const incoming: unknown[] = [];
-  const outgoing: unknown[] = [];
+  const friends: FriendEntry[] = [];
+  const incoming: FriendEntry[] = [];
+  const outgoing: FriendEntry[] = [];
   for (const row of result.results ?? []) {
-    const entry = {
-      id: row.friend_id,
-      name: row.friend_name,
-      email: row.friend_email,
-      since: row.accepted_at ?? row.created_at,
-    };
+    const entry = { id: row.friend_id, name: row.friend_name, email: row.friend_email };
     if (row.status === 'accepted') friends.push(entry);
     else if (row.addressee_id === userId) incoming.push(entry);
     else outgoing.push(entry);
@@ -52,9 +54,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (userOrResponse instanceof Response) return userOrResponse;
   const userId = userOrResponse.id;
 
-  // Sending requests looks up accounts by email, so keep it rate-limited to
-  // make address enumeration impractical.
-  const limit = await checkRateLimit(env, `friend-request:${userId}`, 10);
+  // Sending requests looks up accounts by email. The 404 below deliberately
+  // tells the sender the address has no account (they need that feedback to
+  // catch typos), so keep the limit tight enough that enumerating addresses
+  // is impractical, and never return more than existence — no names.
+  const limit = await checkRateLimit(env, `friend-request:${userId}`, 5);
   if (!limit.ok) {
     return error('Too many friend requests. Try again shortly.', 429, 'rate_limited');
   }
@@ -73,8 +77,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const target = await env.DB.prepare(
-    'SELECT id, name, email FROM users WHERE email = ?',
-  ).bind(email).first<{ id: string; name: string; email: string }>();
+    'SELECT id FROM users WHERE email = ?',
+  ).bind(email).first<{ id: string }>();
 
   if (!target) return error('No COOKIE account with that email yet.', 404, 'not_found');
 
@@ -85,19 +89,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return error('You are already friends.', 409, 'already_friends');
   }
   if (existing && existing.requester_id === userId) {
+    // Covers declined rows too: a declined requester gets the same answer as
+    // an unanswered one.
     return error('Friend request already sent.', 409, 'already_requested');
+  }
+  if (existing?.status === 'declined') {
+    // The decliner is starting over: replace the old row with a fresh request
+    // in the opposite direction.
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM friendships WHERE requester_id = ? AND addressee_id = ?')
+        .bind(target.id, userId),
+      env.DB.prepare('INSERT INTO friendships (requester_id, addressee_id, status, created_at) VALUES (?, ?, ?, ?)')
+        .bind(userId, target.id, 'pending', now),
+    ]);
+    return json({ status: 'pending' });
   }
   if (existing) {
     // They already invited us — treat sending a request back as accepting.
-    await env.DB.prepare(
-      'UPDATE friendships SET status = ?, accepted_at = ? WHERE requester_id = ? AND addressee_id = ?',
-    ).bind('accepted', now, target.id, userId).run();
-    return json({ status: 'accepted', friend: { id: target.id, name: target.name, email: target.email, since: now } });
+    await acceptFriendship(env, target.id, userId);
+    return json({ status: 'accepted' });
   }
 
-  await env.DB.prepare(
-    'INSERT INTO friendships (requester_id, addressee_id, status, created_at) VALUES (?, ?, ?, ?)',
-  ).bind(userId, target.id, 'pending', now).run();
+  try {
+    await env.DB.prepare(
+      'INSERT INTO friendships (requester_id, addressee_id, status, created_at) VALUES (?, ?, ?, ?)',
+    ).bind(userId, target.id, 'pending', now).run();
+  } catch {
+    // The unique pair index caught a concurrent request for the same pair
+    // (either direction) that slipped past the check above.
+    return error('Friend request already sent.', 409, 'already_requested');
+  }
 
-  return json({ status: 'pending', friend: { id: target.id, name: target.name, email: target.email, since: now } });
+  return json({ status: 'pending' });
 };

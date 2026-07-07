@@ -4,7 +4,6 @@ export interface FriendEntry {
   id: string;
   name: string;
   email: string;
-  since: number;
 }
 
 export interface FriendsOverview {

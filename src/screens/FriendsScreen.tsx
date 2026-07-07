@@ -47,25 +47,35 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({ navigateTo }) => {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
+  // Id of the friend a request-list action is in flight for; blocks
+  // double-clicks and repeat actions until the server answers.
+  const [actingId, setActingId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<FriendEntry | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [friendsData, activityData] = await Promise.all([fetchFriends(), fetchFriendActivity()]);
-      setOverview(friendsData);
-      setActivity(activityData);
-    } catch {
-      showToast('Could not load friends');
-    } finally {
-      setLoading(false);
-    }
-  }, [showToast]);
+  // Silent refreshes: keep current content on screen while fetching.
+  const refreshOverview = useCallback(async () => {
+    setOverview(await fetchFriends());
+  }, []);
+  const refreshActivity = useCallback(async () => {
+    setActivity(await fetchFriendActivity());
+  }, []);
 
   useEffect(() => {
-    if (!auth.isGuest) void load();
-    else setLoading(false);
-  }, [load, auth.isGuest]);
+    if (auth.isGuest) return;
+    let cancelled = false;
+    (async () => {
+      // Fetched independently so a failing activity feed can't blank the
+      // friends list (and vice versa).
+      const [friendsResult, activityResult] = await Promise.allSettled([fetchFriends(), fetchFriendActivity()]);
+      if (cancelled) return;
+      if (friendsResult.status === 'fulfilled') setOverview(friendsResult.value);
+      else showToast('Could not load friends');
+      if (activityResult.status === 'fulfilled') setActivity(activityResult.value);
+      else if (friendsResult.status === 'fulfilled') showToast('Could not load activity');
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [auth.isGuest, showToast]);
 
   const handleSend = async () => {
     const trimmed = email.trim();
@@ -75,7 +85,8 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({ navigateTo }) => {
       const status = await sendFriendRequest(trimmed);
       setEmail('');
       showToast(status === 'accepted' ? "You're now friends!" : 'Friend request sent');
-      await load();
+      await refreshOverview();
+      if (status === 'accepted') void refreshActivity().catch(() => {});
     } catch (e) {
       showToast(e instanceof ApiError ? e.message : 'Could not send request');
     } finally {
@@ -84,22 +95,42 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({ navigateTo }) => {
   };
 
   const handleAccept = async (friend: FriendEntry) => {
+    if (actingId) return;
+    setActingId(friend.id);
     try {
       await acceptFriendRequest(friend.id);
+      setOverview(prev => ({
+        ...prev,
+        incoming: prev.incoming.filter(f => f.id !== friend.id),
+        friends: [friend, ...prev.friends],
+      }));
       showToast(`You're now friends with ${friend.name || friend.email}`);
-      await load();
+      void refreshActivity().catch(() => {});
     } catch {
       showToast('Could not accept request');
+    } finally {
+      setActingId(null);
     }
   };
 
   const handleRemove = async (friend: FriendEntry, message: string) => {
+    if (actingId) return;
+    setActingId(friend.id);
+    const wasFriend = overview.friends.some(f => f.id === friend.id);
     try {
       await removeFriend(friend.id);
+      setOverview(prev => ({
+        friends: prev.friends.filter(f => f.id !== friend.id),
+        incoming: prev.incoming.filter(f => f.id !== friend.id),
+        outgoing: prev.outgoing.filter(f => f.id !== friend.id),
+      }));
       showToast(message);
-      await load();
+      // Only unfriending changes the accepted set the feed is built from.
+      if (wasFriend) void refreshActivity().catch(() => {});
     } catch {
       showToast('Could not update friends');
+    } finally {
+      setActingId(null);
     }
   };
 
@@ -171,7 +202,8 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({ navigateTo }) => {
                     <button
                       type="button"
                       onClick={() => void handleAccept(f)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-on-primary text-[10px] font-label uppercase tracking-widest font-bold"
+                      disabled={actingId !== null}
+                      className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-on-primary text-[10px] font-label uppercase tracking-widest font-bold disabled:opacity-50"
                     >
                       <Check size={14} />
                       Accept
@@ -180,7 +212,8 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({ navigateTo }) => {
                       type="button"
                       aria-label={`Decline request from ${f.name || f.email}`}
                       onClick={() => void handleRemove(f, 'Request declined')}
-                      className="p-3 rounded-full border border-outline-variant text-on-surface-variant hover:text-secondary"
+                      disabled={actingId !== null}
+                      className="p-3 rounded-full border border-outline-variant text-on-surface-variant hover:text-secondary disabled:opacity-50"
                     >
                       <X size={16} />
                     </button>
@@ -269,7 +302,8 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({ navigateTo }) => {
                     <button
                       type="button"
                       onClick={() => void handleRemove(f, 'Invite cancelled')}
-                      className="px-4 py-2 rounded-full border border-outline-variant text-on-surface-variant text-[10px] font-label uppercase tracking-widest hover:text-secondary"
+                      disabled={actingId !== null}
+                      className="px-4 py-2 rounded-full border border-outline-variant text-on-surface-variant text-[10px] font-label uppercase tracking-widest hover:text-secondary disabled:opacity-50"
                     >
                       Cancel
                     </button>

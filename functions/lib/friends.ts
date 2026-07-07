@@ -3,7 +3,7 @@ import type { Env } from './env';
 export interface FriendRow {
   requester_id: string;
   addressee_id: string;
-  status: 'pending' | 'accepted';
+  status: 'pending' | 'accepted' | 'declined';
   created_at: number;
   accepted_at: number | null;
 }
@@ -15,6 +15,15 @@ export async function getFriendship(env: Env, userA: string, userB: string): Pro
      FROM friendships
      WHERE (requester_id = ?1 AND addressee_id = ?2) OR (requester_id = ?2 AND addressee_id = ?1)`,
   ).bind(userA, userB).first<FriendRow>();
+}
+
+/** Accepts a pending request; returns the number of rows updated (0 if none was pending). */
+export async function acceptFriendship(env: Env, requesterId: string, addresseeId: string): Promise<number> {
+  const result = await env.DB.prepare(
+    `UPDATE friendships SET status = 'accepted', accepted_at = ?
+     WHERE requester_id = ? AND addressee_id = ? AND status = 'pending'`,
+  ).bind(Date.now(), requesterId, addresseeId).run();
+  return result.meta.changes ?? 0;
 }
 
 /** Ids of users with an accepted friendship with this user. */
