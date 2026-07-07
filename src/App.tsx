@@ -25,6 +25,7 @@ import { CookPlanScreen } from './screens/CookPlanScreen';
 import { CookPlanModeScreen } from './screens/CookPlanModeScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { MealPlanScreen } from './screens/MealPlanScreen';
+import { FriendsScreen } from './screens/FriendsScreen';
 import { ShareRecipeScreen } from './screens/ShareRecipeScreen';
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen';
 import { AuthScreen } from './screens/AuthScreen';
@@ -281,6 +282,8 @@ export default function App() {
           {currentScreen === 'settings' && <SettingsScreen navigateTo={navigateTo} />}
 
           {currentScreen === 'meal-plan' && <MealPlanScreen navigateTo={navigateTo} />}
+
+          {currentScreen === 'friends' && <FriendsScreen navigateTo={navigateTo} />}
 
           {currentScreen === 'share' && shareToken && (
             <ShareRecipeScreen

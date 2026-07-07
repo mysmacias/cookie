@@ -29,6 +29,7 @@ export const Footer: React.FC<FooterProps> = ({ navigateTo }) => {
             <li><FooterLink onClick={() => navigateTo('meal-plan')}>Meal plan</FooterLink></li>
             <li><FooterLink onClick={() => navigateTo('shopping')}>Shopping list</FooterLink></li>
             <li><FooterLink onClick={() => navigateTo('collections')}>Collections</FooterLink></li>
+            <li><FooterLink onClick={() => navigateTo('friends')}>Friends</FooterLink></li>
             <li><FooterLink onClick={() => navigateTo('exports')}>My books</FooterLink></li>
             <li><FooterLink onClick={() => navigateTo('about')}>Our Story</FooterLink></li>
             <li><FooterLink onClick={() => navigateTo('add')}>Submit Recipe</FooterLink></li>
