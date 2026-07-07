@@ -24,6 +24,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
     env.DB.prepare('DELETE FROM scan_usage WHERE user_id = ?').bind(userOrResponse.id),
     env.DB.prepare('DELETE FROM meal_plans WHERE user_id = ?').bind(userOrResponse.id),
     env.DB.prepare('DELETE FROM shared_recipes WHERE user_id = ?').bind(userOrResponse.id),
+    env.DB.prepare('DELETE FROM friendships WHERE requester_id = ? OR addressee_id = ?').bind(userOrResponse.id, userOrResponse.id),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userOrResponse.id),
   ]);
 

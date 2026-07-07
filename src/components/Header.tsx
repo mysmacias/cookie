@@ -128,6 +128,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, navigateTo, isMen
                 <NavButton label="Shopping list" screen="shopping" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
                 <NavButton label="Meal plan" screen="meal-plan" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
                 <NavButton label="Collections" screen="collections" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
+                <NavButton label="Friends" screen="friends" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
                 <NavButton label="My books" screen="exports" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
                 <NavButton label="Settings" screen="settings" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />
                 <NavButton label="About" screen="about" currentScreen={currentScreen} navigateTo={navigateTo} onNavigate={closeMenu} className="text-left" />

@@ -27,6 +27,7 @@ export type Screen =
   | 'cook-plan-mode'
   | 'settings'
   | 'meal-plan'
+  | 'friends'
   | 'share';
 
 interface RouteState {
@@ -58,6 +59,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   'cook-plan-mode': 'Cook plan',
   settings: 'Settings',
   'meal-plan': 'Meal plan',
+  friends: 'Friends',
   share: 'Shared recipe',
 };
 
@@ -72,6 +74,7 @@ function routeFromLocation(pathname: string, search: string): RouteState {
   if (parts[0] === 'shopping') return { screen: 'shopping', recipeId: null, graphFocusId: null, cookPlanRecipeIds: [], collectionId: null, shareToken: null, editing: false };
   if (parts[0] === 'settings') return { screen: 'settings', recipeId: null, graphFocusId: null, cookPlanRecipeIds: [], collectionId: null, shareToken: null, editing: false };
   if (parts[0] === 'meal-plan') return { screen: 'meal-plan', recipeId: null, graphFocusId: null, cookPlanRecipeIds: [], collectionId: null, shareToken: null, editing: false };
+  if (parts[0] === 'friends') return { screen: 'friends', recipeId: null, graphFocusId: null, cookPlanRecipeIds: [], collectionId: null, shareToken: null, editing: false };
   if (parts[0] === 'collections' && parts[1]) {
     return { screen: 'collection-detail', recipeId: null, graphFocusId: null, cookPlanRecipeIds: [], collectionId: parts[1], shareToken: null, editing: false };
   }
@@ -115,6 +118,7 @@ function pathFor(
     case 'shopping': return '/shopping';
     case 'settings': return '/settings';
     case 'meal-plan': return '/meal-plan';
+    case 'friends': return '/friends';
     case 'collections': return '/collections';
     case 'collection-detail':
       return collectionId ? `/collections/${encodeURIComponent(collectionId)}` : '/collections';
